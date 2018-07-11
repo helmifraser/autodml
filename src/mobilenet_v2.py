@@ -17,8 +17,8 @@ x = np.expand_dims(x, axis=0)
 x = preprocess_input(x)
 
 preds = model.predict(x)
-model.summary()
 
+model.summary()
 
 # decode the results into a list of tuples (class, description, probability)
 # (one such list for each sample in the batch)
