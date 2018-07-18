@@ -25,8 +25,7 @@ class SegConv(object):
             Callback function invoked when initiating a node shutdown. Called
             before actual shutdown occurs.
         """
-        print("bilkaj")
-        # rospy.logwarn("Shutting down all the things fam")
+        print("Shutting down")
         # sys.exit()
         # os.system('kill %d' % os.getpid())
 

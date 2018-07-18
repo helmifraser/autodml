@@ -1,31 +1,5 @@
 #!/usr/bin/env python3
 
-# Copyright (c) 2017 Computer Vision Center (CVC) at the Universitat Autonoma de
-# Barcelona (UAB).
-#
-# This work is licensed under the terms of the MIT license.
-# For a copy, see <https://opensource.org/licenses/MIT>.
-
-# Keyboard controlling for CARLA. Please refer to client_example.py for a simpler
-# and more documented example.
-
-"""
-Welcome to CARLA manual control.
-
-Use ARROWS or WASD keys for control.
-
-    W            : throttle
-    S            : brake
-    AD           : steer
-    Q            : toggle reverse
-    Space        : hand-brake
-    P            : toggle autopilot
-
-    R            : restart level
-
-STARTING in a moment...
-"""
-
 from __future__ import print_function
 
 import argparse
