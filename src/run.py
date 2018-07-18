@@ -1,5 +1,4 @@
 import os
-import pickle
 import numpy as np
 import pandas as pd
 from datetime import datetime
@@ -13,14 +12,14 @@ from keras.models import Model, load_model
 from keras.preprocessing import image
 from keras.preprocessing.image import ImageDataGenerator, img_to_array, load_img
 
-from scipy.misc import imsave
+# from scipy.misc import imsave
 
 from loss_history import LossHistory
 import network
 
 np.random.seed(420)  # for high reproducibility
 
-DATASET_PATH = "/media/helmi/My Passport/helmi/carla_dataset/train"
+DATASET_PATH = "../../carla_dataset/train"
 DATA_HEADERS = ["frame_no", "steer", "throttle", "brake", "reverse"]
 COLS_TO_USE = [1, 2, 3]
 
@@ -145,9 +144,10 @@ def train(data_path, model, callbacks, target_model_name, num_epochs=50,
 
         checkpoint += 1
         if checkpoint == 3:
-            print("Checkpoint: Saving model to " + "../weights/checkpoint_"
+            print("Checkpoint: Saving model to "
+                  + "../weights/checkpoints/checkpoint_"
                   + str(idx) + "_" + target_model_name + '.h5')
-            model.save("../weights/checkpoint_" + str(idx) + "_"
+            model.save("../weights/checkpoints/checkpoint_" + str(idx) + "_"
                        + target_model_name + '.h5')
             checkpoint = 0
 
@@ -162,8 +162,9 @@ def train(data_path, model, callbacks, target_model_name, num_epochs=50,
 def train_with_all(data_path, model, target_model_name, nb_epochs=10,
                    checkpoint_stage=10, callbacks=None):
     folders = os.listdir(data_path)
-    history_file = open("history_file_"+target_model_name+".txt", 'a')
     checkpoint = 0
+    history_file = open("../weights/histories/history_file_"
+    + target_model_name+".txt", 'a')
     for idx, folder in enumerate(folders):
         print("Obtaining data: {}/{}".format(idx, len(folders) - 1))
         x_data, y_data = obtain_episode_data(
@@ -172,16 +173,16 @@ def train_with_all(data_path, model, target_model_name, nb_epochs=10,
         y_data = np.asarray(y_data)
 
         history = model.fit([x_data], [y_data[..., 0],
-                             y_data[..., 1],
-                             y_data[..., 2]],
-                  epochs=nb_epochs, callbacks=callbacks)
+                                       y_data[..., 1],
+                                       y_data[..., 2]],
+                            epochs=nb_epochs, callbacks=callbacks)
 
         checkpoint += 1
         history_file.write(str(history.history['loss'])+"\n")
         if checkpoint == checkpoint_stage:
-            print("Checkpoint: Saving model to " + "../weights/checkpoint_"
+            print("Checkpoint: Saving model to " + "../weights/checkpoints/checkpoint_"
                   + str(idx) + "_" + target_model_name + '.h5')
-            model.save("../weights/checkpoint_" + str(idx) + "_"
+            model.save("../weights/checkpoints/checkpoint_" + str(idx) + "_"
                        + target_model_name + '.h5')
             checkpoint = 0
 

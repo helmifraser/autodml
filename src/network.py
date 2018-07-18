@@ -12,13 +12,15 @@ IMG_WIDTH = 224
 IMG_HEIGHT = 224
 
 
-def create_model(learning_rate=0.01):
+def create_model(learning_rate=0.001):
     img = Input(shape=(IMG_WIDTH, IMG_HEIGHT, 3), name='img')
     mobilenet = MobileNetV2(input_shape=(IMG_WIDTH, IMG_HEIGHT, 3), alpha=1.0,
                             depth_multiplier=1, include_top=False,
                             weights='imagenet', pooling='max')(img)
-    mobilenet.trainable = False
-    x = Dense(64, input_shape=(1, 1280), activation='relu')(mobilenet)
+    # mobilenet.trainable = False
+    x = Dense(640, input_shape=(1, 1280), activation='relu')(mobilenet)
+    x = Dropout(0.2)(x)
+    x = Dense(80, activation='relu')(x)
     x = Dropout(0.2)(x)
     x = Dense(16, activation='relu')(x)
     x = Dropout(0.2)(x)
@@ -26,6 +28,9 @@ def create_model(learning_rate=0.01):
     throttle = Dense(1, activation='relu', name='throttle')(x)
     brake = Dense(1, activation='relu', name='brake')(x)
     model = Model(inputs=img, outputs=[steer, throttle, brake])
+
+    for layers in model.layers[:2]:
+        layers.trainable = False
 
     # print("All layers added")
 
