@@ -6,13 +6,14 @@ from keras.layers import Dense, Dropout, Input
 from keras.models import Model, load_model
 from keras.preprocessing import image
 from keras.preprocessing.image import ImageDataGenerator, img_to_array, load_img
+from keras.utils.training_utils import multi_gpu_model
 
 
 IMG_WIDTH = 224
 IMG_HEIGHT = 224
 
 
-def create_model(learning_rate=0.001):
+def create_model(learning_rate=0.001, multi_gpu=False, gpus=2):
     img = Input(shape=(IMG_WIDTH, IMG_HEIGHT, 3), name='img')
     mobilenet = MobileNetV2(input_shape=(IMG_WIDTH, IMG_HEIGHT, 3), alpha=1.0,
                             depth_multiplier=1, include_top=False,
@@ -36,9 +37,16 @@ def create_model(learning_rate=0.001):
 
     adam = optimizers.Adam(lr=learning_rate)
 
-    # print("Compiling")
+    print("Compiling model, will use ", end='')
+
+    if multi_gpu is True:
+        print("{} GPUs".format(gpus))
+        model = multi_gpu_model(model, gpus=gpus)
+    else:
+        print("a single GPU")
 
     model.compile(optimizer=adam, loss='mean_squared_error',
-                  metrics=['mse'])
+                    metrics=['mse'])
+
     model.summary()
     return model

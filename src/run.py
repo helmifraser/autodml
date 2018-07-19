@@ -19,6 +19,8 @@ import network
 
 np.random.seed(420)  # for high reproducibility
 
+os.environ["CUDA_VISIBLE_DEVICES"]="5,6"
+USE_MULTI=True
 DATASET_PATH = "../../carla_dataset/train"
 DATA_HEADERS = ["frame_no", "steer", "throttle", "brake", "reverse"]
 COLS_TO_USE = [1, 2, 3]
@@ -191,7 +193,7 @@ def train_with_all(data_path, model, target_model_name, nb_epochs=10,
 
 
 name = str(datetime.now())
-model = network.create_model()
+model = network.create_model(multi_gpu=USE_MULTI)
 
 # tensorboard_cb = keras.callbacks.TensorBoard(log_dir='./graph', histogram_freq=0,
 #           write_graph=True, write_images=True)
