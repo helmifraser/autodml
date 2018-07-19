@@ -115,6 +115,8 @@ def batch_generator(features, labels, batch_size=32):
         batch_labels = np.asarray(batch_labels)
         yield batch_features, batch_labels
 
+def digit_counter(s):
+    return [sum(n) for n in zip(*((c.isdigit(), c.isalpha()) for c in s))]
 
 def train(data_path, model, callbacks, target_model_name, num_epochs=50,
           number_of_batches=32, batch_size=32, test=False):
@@ -191,9 +193,10 @@ def train_with_all(data_path, model, target_model_name, nb_epochs=10,
     print("Saving model to "+"../weights/twa_final_"+target_model_name+'.h5')
     model.save("../weights/twa_final_"+target_model_name+'.h5')
 
-
+gpus = digit_counter(os.environ["CUDA_VISIBLE_DEVICES"])[0]
 name = str(datetime.now())
-model = network.create_model(multi_gpu=USE_MULTI)
+
+model = network.create_model(multi_gpu=USE_MULTI, gpus=gpus)
 
 # tensorboard_cb = keras.callbacks.TensorBoard(log_dir='./graph', histogram_freq=0,
 #           write_graph=True, write_images=True)
