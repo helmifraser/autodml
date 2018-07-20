@@ -194,7 +194,7 @@ def train_with_all(data_path, model, target_model_name, nb_epochs=10,
     save_model.save("../weights/twa_final_"+target_model_name+'.h5')
 
 gpus = digit_counter(os.environ["CUDA_VISIBLE_DEVICES"])[0]
-name = str(datetime.now())
+name = str(datetime.now()).replace(" ", "_")
 
 parallel_model, model = network.create_model(multi_gpu=USE_MULTI, gpus=gpus)
 
