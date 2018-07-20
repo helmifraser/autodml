@@ -164,7 +164,7 @@ def train(data_path, model, callbacks, target_model_name, num_epochs=50,
 
 
 def train_with_all(data_path, model, target_model_name, nb_epochs=10,
-                   checkpoint_stage=10, callbacks=None):
+                   checkpoint_stage=10, callbacks=None, save_model=None):
     folders = os.listdir(data_path)
     checkpoint = 0
     history_file = open("../weights/histories/history_file_"
@@ -177,8 +177,7 @@ def train_with_all(data_path, model, target_model_name, nb_epochs=10,
         y_data = np.asarray(y_data)
 
         history = model.fit([x_data], [y_data[..., 0],
-                                       y_data[..., 1],
-                                       y_data[..., 2]],
+                                       y_data[..., 1]],
                             epochs=nb_epochs, callbacks=callbacks)
 
         checkpoint += 1
@@ -186,44 +185,34 @@ def train_with_all(data_path, model, target_model_name, nb_epochs=10,
         if checkpoint == checkpoint_stage:
             print("Checkpoint: Saving model to " + "../weights/checkpoints/checkpoint_"
                   + str(idx) + "_" + target_model_name + '.h5')
-            model.save("../weights/checkpoints/checkpoint_" + str(idx) + "_"
-                       + target_model_name + '.h5')
+            if save_model is not None:
+                save_model.save("../weights/checkpoints/checkpoint_" + str(idx) + "_"
+                           + target_model_name + '.h5')
             checkpoint = 0
 
     print("Saving model to "+"../weights/twa_final_"+target_model_name+'.h5')
-    model.save("../weights/twa_final_"+target_model_name+'.h5')
+    save_model.save("../weights/twa_final_"+target_model_name+'.h5')
 
 gpus = digit_counter(os.environ["CUDA_VISIBLE_DEVICES"])[0]
 name = str(datetime.now())
 
-model = network.create_model(multi_gpu=USE_MULTI, gpus=gpus)
+parallel_model, model = network.create_model(multi_gpu=USE_MULTI, gpus=gpus)
 
 # tensorboard_cb = keras.callbacks.TensorBoard(log_dir='./graph', histogram_freq=0,
 #           write_graph=True, write_images=True)
 stop = EarlyStopping(monitor='loss', min_delta=0.0001, patience=5, verbose=1,
                      mode='auto')
-checkpointer = ModelCheckpoint(filepath='../weights/checkpoint.hdf5', verbose=1,
-                               save_best_only=True)
+# checkpointer = ModelCheckpoint(filepath='../weights/checkpoint.hdf5', verbose=1,
+#                                save_best_only=True)
 history = LossHistory()
 
-callbacks = [checkpointer, history, stop]
+callbacks = [history, stop]
 
-# train(DATASET_PATH, model, callbacks, name,
-#       num_epochs=10,
-#       number_of_batches=10, batch_size=60)
-
-train_with_all(DATASET_PATH, model, name, nb_epochs=20, callbacks=callbacks)
+train_with_all(DATASET_PATH,
+                target_model_name=name,
+                model=parallel_model,
+                save_model=model,
+                nb_epochs=20,
+                callbacks=callbacks)
 
 print("All done")
-
-# here's a more "manual" example
-# for e in range(1, 11):
-#     print('Epoch', e)
-#     batches = 0
-#     for x_batch in datagen.flow(x_train, batch_size=32):
-#         model.fit(x_batch, y_train)
-#         batches += 1
-#         if batches >= len(x_train) / 32:
-#             # we need to break the loop by hand because
-#             # the generator loops indefinitely
-#             break

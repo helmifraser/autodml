@@ -26,9 +26,9 @@ def create_model(learning_rate=0.001, multi_gpu=False, gpus=2):
     x = Dense(16, activation='relu')(x)
     x = Dropout(0.2)(x)
     steer = Dense(1, activation='tanh', name='steer')(x)
-    throttle = Dense(1, activation='relu', name='throttle')(x)
-    brake = Dense(1, activation='relu', name='brake')(x)
-    model = Model(inputs=img, outputs=[steer, throttle, brake])
+    throttle = Dense(1, activation='tanh', name='throttle')(x)
+    # brake = Dense(1, activation='tanh', name='brake')(x)
+    model = Model(inputs=img, outputs=[steer, throttle])
 
     for layers in model.layers[:2]:
         layers.trainable = False
@@ -41,7 +41,9 @@ def create_model(learning_rate=0.001, multi_gpu=False, gpus=2):
 
     if multi_gpu is True:
         print("{} GPUs".format(gpus))
-        model = multi_gpu_model(model, gpus=gpus)
+        parallel_model = multi_gpu_model(model, gpus=gpus)
+        parallel_model.compile(optimizer=adam, loss='mean_squared_error',
+                        metrics=['mse'])
     else:
         print("a single GPU")
 
@@ -49,4 +51,8 @@ def create_model(learning_rate=0.001, multi_gpu=False, gpus=2):
                     metrics=['mse'])
 
     model.summary()
-    return model
+
+    if multi_gpu is True:
+        return parallel_model, model
+    else:
+        return model
