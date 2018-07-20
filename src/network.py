@@ -8,44 +8,69 @@ from keras.preprocessing import image
 from keras.preprocessing.image import ImageDataGenerator, img_to_array, load_img
 from keras.utils.training_utils import multi_gpu_model
 
+from coloured_print import printc
 
 IMG_WIDTH = 224
 IMG_HEIGHT = 224
 
+# params are [lr, d_1, d_2, d_3, dr]
 
-def create_model(learning_rate=0.001, multi_gpu=False, gpus=2):
+def create_model(model_params=[0.001], multi_gpu=False, gpus=2):
     img = Input(shape=(IMG_WIDTH, IMG_HEIGHT, 3), name='img')
     mobilenet = MobileNetV2(input_shape=(IMG_WIDTH, IMG_HEIGHT, 3), alpha=1.0,
                             depth_multiplier=1, include_top=False,
                             weights='imagenet', pooling='max')(img)
     # mobilenet.trainable = False
-    x = Dense(640, input_shape=(1, 1280), activation='relu')(mobilenet)
-    x = Dropout(0.9)(x)
-    x = Dense(80, activation='relu')(x)
-    x = Dropout(0.9)(x)
-    x = Dense(16, activation='relu')(x)
-    x = Dropout(0.9)(x)
-    steer = Dense(1, activation='tanh', name='steer')(x)
-    throttle = Dense(1, activation='tanh', name='throttle')(x)
-    # brake = Dense(1, activation='tanh', name='brake')(x)
-    model = Model(inputs=img, outputs=[steer, throttle])
+
+    # Default params
+    model = []
+    if len(model_params) == 1:
+        x = Dense(640, input_shape=(1, 1280), activation='relu')(mobilenet)
+        x = Dropout(0.2)(x)
+        x = Dense(80, activation='relu')(x)
+        x = Dropout(0.2)(x)
+        x = Dense(16, activation='relu')(x)
+        x = Dropout(0.2)(x)
+        steer = Dense(1, activation='tanh', name='steer')(x)
+        throttle = Dense(1, activation='tanh', name='throttle')(x)
+        # brake = Dense(1, activation='tanh', name='brake')(x)
+        model = Model(inputs=img, outputs=[steer, throttle])
+    elif len(model_params) == 5:
+        print(" ")
+        print("Params:")
+        print("Learning rate:", end=''); printc(" {}".format(model_params[0]), 'okgreen')
+        print("Dense_1:", end=''); printc(" {}".format(model_params[1]), 'okgreen')
+        print("Dense_2:", end=''); printc(" {}".format(model_params[2]), 'okgreen')
+        print("Dense_3:", end=''); printc(" {}".format(model_params[3]), 'okgreen')
+        print("Dropout rate:", end=''); printc(" {}".format(model_params[4]), 'okgreen')
+        print(" ")
+        x = Dense(model_params[1], input_shape=(1, 1280), activation='relu')(mobilenet)
+        x = Dropout(model_params[4])(x)
+        x = Dense(model_params[2], activation='relu')(x)
+        x = Dropout(model_params[4])(x)
+        x = Dense(model_params[3], activation='relu')(x)
+        x = Dropout(model_params[4])(x)
+        steer = Dense(1, activation='tanh', name='steer')(x)
+        throttle = Dense(1, activation='tanh', name='throttle')(x)
+        # brake = Dense(1, activation='tanh', name='brake')(x)
+        model = Model(inputs=img, outputs=[steer, throttle])
+    else:
+        printc("Error: malformed model_params argument. Expected size 5 got size {}".format(len(model_params)))
 
     for layers in model.layers[:2]:
         layers.trainable = False
 
-    # print("All layers added")
-
-    adam = optimizers.Adam(lr=learning_rate)
+    adam = optimizers.Adam(lr=model_params[0])
 
     print("Compiling model, will use ", end='')
 
     if multi_gpu is True:
-        print("{} GPUs".format(gpus))
+        printc("{} GPUs".format(gpus), 'okgreen')
         parallel_model = multi_gpu_model(model, gpus=gpus)
         parallel_model.compile(optimizer=adam, loss='mean_squared_error',
                         metrics=['mse'])
     else:
-        print("a single GPU")
+        printc("a single GPU")
 
     model.compile(optimizer=adam, loss='mean_squared_error',
                     metrics=['mse'])

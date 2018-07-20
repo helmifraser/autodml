@@ -16,6 +16,7 @@ from keras.preprocessing.image import ImageDataGenerator, img_to_array, load_img
 
 from loss_history import LossHistory
 import network
+from coloured_print import printc
 
 np.random.seed(420)  # for high reproducibility
 
@@ -24,7 +25,6 @@ USE_MULTI=True
 DATASET_PATH = "../../carla_dataset/train"
 DATA_HEADERS = ["frame_no", "steer", "throttle", "brake", "reverse"]
 COLS_TO_USE = [1, 2, 3]
-
 
 def obtain_data(data_path):
     """Returns all data in folder. Path is top level of data i.e ../dataset/train"""
@@ -55,7 +55,7 @@ def obtain_episode_data(folder_path, seg=False, delim=' ', header_names=None,
     if os.path.isdir(rgb_path):
         rgb_images = image_extract(rgb_path)
     else:
-        print("Error:- folder '{}' not found".format(rgb_path))
+        printc("Error:- folder '{}' not found".format(rgb_path))
 
     if seg == True:
         seg_path = folder_path+"/CameraSemSeg"
@@ -63,7 +63,7 @@ def obtain_episode_data(folder_path, seg=False, delim=' ', header_names=None,
             # files_seg = sum(os.path.isdir(i) for i in os.listdir(seg_path))
             seg_images = image_extract(seg_path)
         else:
-            print("Error:- folder '{}' not found".format(seg_path))
+            printc("Error:- folder '{}' not found".format(seg_path))
 
     # Obtain y data
 
@@ -183,36 +183,49 @@ def train_with_all(data_path, model, target_model_name, nb_epochs=10,
         checkpoint += 1
         history_file.write(str(history.history['loss'])+"\n")
         if checkpoint == checkpoint_stage:
-            print("Checkpoint: Saving model to " + "../weights/checkpoints/checkpoint_"
-                  + str(idx) + "_" + target_model_name + '.h5')
+            printc("Checkpoint: Saving model to " + "../weights/checkpoints/checkpoint_"
+                  + str(idx) + "_" + target_model_name + '.h5', 'okgreen')
             if save_model is not None:
                 save_model.save("../weights/checkpoints/checkpoint_" + str(idx) + "_"
                            + target_model_name + '.h5')
             checkpoint = 0
 
-    print("Saving model to "+"../weights/twa_final_"+target_model_name+'.h5')
-    save_model.save("../weights/twa_final_"+target_model_name+'.h5')
+    printc("Saving model to "+"../weights/finals/twa_final_"+target_model_name+'.h5', 'okgreen')
+    save_model.save("../weights/finals/twa_final_"+target_model_name+'.h5')
 
 gpus = digit_counter(os.environ["CUDA_VISIBLE_DEVICES"])[0]
-name = str(datetime.now()).replace(" ", "_")
 
-parallel_model, model = network.create_model(multi_gpu=USE_MULTI, gpus=gpus)
+params = [  [0.001, 320, 40, 8, 0.6],
+            [0.001, 160, 20, 4, 0.6],
+            [0.001, 80, 10, 2, 0.6],
+            [0.001, 960, 120, 24, 0.6],
+            [0.001, 1280, 160, 32, 0.6],
+            [0.001, 1600, 200, 40, 0.6]]
 
-# tensorboard_cb = keras.callbacks.TensorBoard(log_dir='./graph', histogram_freq=0,
-#           write_graph=True, write_images=True)
-stop = EarlyStopping(monitor='loss', min_delta=0.0001, patience=5, verbose=1,
-                     mode='auto')
-# checkpointer = ModelCheckpoint(filepath='../weights/checkpoint.hdf5', verbose=1,
-#                                save_best_only=True)
-history = LossHistory()
+for id, param in enumerate(params):
+    name = str(datetime.now()).replace(" ", "_")
 
-callbacks = [history, stop]
+    parallel_model, model = network.create_model(model_params=param,
+                                                    multi_gpu=USE_MULTI, gpus=gpus)
 
-train_with_all(DATASET_PATH,
-                target_model_name=name,
-                model=parallel_model,
-                save_model=model,
-                nb_epochs=20,
-                callbacks=callbacks)
+    # tensorboard_cb = keras.callbacks.TensorBoard(log_dir='./graph', histogram_freq=0,
+    #           write_graph=True, write_images=True)
+    stop = EarlyStopping(monitor='loss', min_delta=0.0001, patience=5, verbose=1,
+                         mode='auto')
+    # checkpointer = ModelCheckpoint(filepath='../weights/checkpoint.hdf5', verbose=1,
+    #                                save_best_only=True)
+    history = LossHistory()
 
-print("All done")
+    callbacks = [history, stop]
+
+    train_with_all(DATASET_PATH,
+                    target_model_name=name,
+                    model=parallel_model,
+                    save_model=model,
+                    nb_epochs=20,
+                    callbacks=callbacks)
+
+    printc("Param set: {} done".format(id))
+    printc("Params: {}".format(param))
+
+printc("All done", 'okgreen')

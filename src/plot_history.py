@@ -5,6 +5,8 @@ import math
 import argparse
 import sys
 
+from coloured_print import printc
+
 parser = argparse.ArgumentParser(description='Plot loss history file')
 parser.add_argument('filepath', metavar='filepath', type=str, nargs='+',
                     help='filepath of history file(s)')
@@ -13,7 +15,7 @@ args = parser.parse_args()
 filepath = args.filepath
 
 if filepath is None:
-    print("Error: filepath == None, no filepath specified, cannot plot data")
+    printc("Error: filepath == None, no filepath specified, cannot plot data")
     sys.exit(0)
 
 print("Displaying loss plot: {}".format(filepath))
@@ -50,7 +52,7 @@ for idx, path in enumerate(filepath):
 
         # serialised.append(episode)
 
-    plt.plot([i for i in range(len(concatenated))], concatenated, label=path[path.find("/"):])
+    plt.plot([i for i in range(len(concatenated))], concatenated, label=path[path.rfind("/")+1:])
     plt.legend(loc='upper right')
     plt.xlabel('Epoch (total)')
     plt.ylabel('Loss')
