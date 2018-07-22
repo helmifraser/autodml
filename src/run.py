@@ -2,6 +2,7 @@ import os
 import numpy as np
 import pandas as pd
 from datetime import datetime
+import argparse
 
 import keras
 from keras import optimizers
@@ -20,11 +21,26 @@ from coloured_print import printc
 
 np.random.seed(420)  # for high reproducibility
 
-os.environ["CUDA_VISIBLE_DEVICES"]="5,6"
-USE_MULTI=True
-DATASET_PATH = "../../carla_dataset/train"
+parser = argparse.ArgumentParser(description="Train a model")
+parser.add_argument('-d', metavar='dataset_path', type=str,
+                    help='Path to training set')
+parser.add_argument('-gpus', metavar='gpu_number(s)', type=int, nargs='+',
+                    default=[0], help='GPUs visible to this script')
+
+args = parser.parse_args()
+gpu_number = args.gpus
+d_path = args.d
+
+os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_number)[1:-1]
+
+USE_MULTI = False
+if len(gpu_number) > 1:
+    USE_MULTI = True
+
+DATASET_PATH = d_path
 DATA_HEADERS = ["frame_no", "steer", "throttle", "brake", "reverse"]
 COLS_TO_USE = [1, 2, 3]
+
 
 def obtain_data(data_path):
     """Returns all data in folder. Path is top level of data i.e ../dataset/train"""
@@ -115,8 +131,10 @@ def batch_generator(features, labels, batch_size=32):
         batch_labels = np.asarray(batch_labels)
         yield batch_features, batch_labels
 
+
 def digit_counter(s):
     return [sum(n) for n in zip(*((c.isdigit(), c.isalpha()) for c in s))]
+
 
 def train(data_path, model, callbacks, target_model_name, num_epochs=50,
           number_of_batches=32, batch_size=32, test=False):
@@ -168,7 +186,7 @@ def train_with_all(data_path, model, target_model_name, nb_epochs=10,
     folders = os.listdir(data_path)
     checkpoint = 0
     history_file = open("../weights/histories/history_file_"
-    + target_model_name+".txt", 'a')
+                        + target_model_name+".txt", 'a')
     for idx, folder in enumerate(folders):
         print("Obtaining data: {}/{}".format(idx, len(folders) - 1))
         x_data, y_data = obtain_episode_data(
@@ -184,29 +202,28 @@ def train_with_all(data_path, model, target_model_name, nb_epochs=10,
         history_file.write(str(history.history['loss'])+"\n")
         if checkpoint == checkpoint_stage:
             printc("Checkpoint: Saving model to " + "../weights/checkpoints/checkpoint_"
-                  + str(idx) + "_" + target_model_name + '.h5', 'okgreen')
+                   + str(idx) + "_" + target_model_name + '.h5', 'okgreen')
             if save_model is not None:
                 save_model.save("../weights/checkpoints/checkpoint_" + str(idx) + "_"
-                           + target_model_name + '.h5')
+                                + target_model_name + '.h5')
             checkpoint = 0
 
-    printc("Saving model to "+"../weights/finals/twa_final_"+target_model_name+'.h5', 'okgreen')
+    printc("Saving model to "+"../weights/finals/twa_final_" +
+           target_model_name+'.h5', 'okgreen')
     save_model.save("../weights/finals/twa_final_"+target_model_name+'.h5')
+
 
 gpus = digit_counter(os.environ["CUDA_VISIBLE_DEVICES"])[0]
 
-params = [  [0.001, 320, 40, 8, 0.6],
-            [0.001, 160, 20, 4, 0.6],
-            [0.001, 80, 10, 2, 0.6],
-            [0.001, 960, 120, 24, 0.6],
-            [0.001, 1280, 160, 32, 0.6],
-            [0.001, 1600, 200, 40, 0.6]]
+params = [[0.001, 320, 40, 8, 0.6]]
+# [0.001, 160, 20, 4, 0.6],
+# [0.001, 80, 10, 2, 0.6],
+# [0.001, 960, 120, 24, 0.6],
+# [0.001, 1280, 160, 32, 0.6],
+# [0.001, 1600, 200, 40, 0.6]]
 
 for id, param in enumerate(params):
     name = str(datetime.now()).replace(" ", "_")
-
-    parallel_model, model = network.create_model(model_params=param,
-                                                    multi_gpu=USE_MULTI, gpus=gpus)
 
     # tensorboard_cb = keras.callbacks.TensorBoard(log_dir='./graph', histogram_freq=0,
     #           write_graph=True, write_images=True)
@@ -218,12 +235,25 @@ for id, param in enumerate(params):
 
     callbacks = [history, stop]
 
-    train_with_all(DATASET_PATH,
-                    target_model_name=name,
-                    model=parallel_model,
-                    save_model=model,
-                    nb_epochs=20,
-                    callbacks=callbacks)
+    if USE_MULTI is True:
+        parallel_model, model = network.create_model(model_params=param,
+                                                     multi_gpu=USE_MULTI, gpus=gpus)
+        train_with_all(DATASET_PATH,
+                       target_model_name=name,
+                       model=parallel_model,
+                       save_model=model,
+                       nb_epochs=20,
+                       callbacks=callbacks)
+
+    else:
+        model = network.create_model(model_params=param,
+                                     multi_gpu=USE_MULTI, gpus=gpus)
+        train_with_all(DATASET_PATH,
+                       target_model_name=name,
+                       model=model,
+                       save_model=model,
+                       nb_epochs=20,
+                       callbacks=callbacks)
 
     printc("Param set: {} done".format(id))
     printc("Params: {}".format(param))
