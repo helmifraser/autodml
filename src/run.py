@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import pandas as pd
+import time
 from datetime import datetime
 import argparse
 
@@ -41,6 +42,7 @@ if len(gpu_number) > 1:
     USE_MULTI = True
 
 DATASET_PATH = d_path
+VALSET_PATH = v_path
 DATA_HEADERS = ["frame_no", "steer", "throttle", "brake", "reverse"]
 COLS_TO_USE = [1, 2, 3]
 
@@ -48,8 +50,12 @@ COLS_TO_USE = [1, 2, 3]
 def obtain_data(data_path):
     """Returns all data in folder. Path is top level of data i.e ../dataset/train"""
     folders = os.listdir(data_path)
-    x_data = [None] * len(folders)
-    y_data = [None] * len(folders)
+    # x_data = [None] * len(folders)
+    # y_data = [None] * len(folders)
+
+    x_data = np.zeros((600*len(folders), 224, 224, 3))
+    y_data = np.zeros((600*len(folders), 3))
+
 
     print("Within '{}', I found {} folders: {}".format(
         data_path, len(folders), folders))
@@ -57,11 +63,14 @@ def obtain_data(data_path):
     for idx, folder in enumerate(folders):
         print("Fetching episode {} of {}: {}".format(
             idx, len(folders) - 1, folder))
-        x_data[idx], y_data[idx] = obtain_episode_data(
+        x_ep, y_ep = obtain_episode_data(
             data_path+"/"+folder, header_names=DATA_HEADERS)
+        x_data[idx*600:600 + (idx*600)] = x_ep
+        y_data[idx*600:600 + (idx*600)] = y_ep
+
 
     print("All done")
-    return x_data, y_data
+    return np.asarray(x_data), np.asarray(y_data)
 
 
 def obtain_episode_data(folder_path, seg=False, delim=' ', header_names=None,
@@ -94,7 +103,7 @@ def obtain_episode_data(folder_path, seg=False, delim=' ', header_names=None,
 
     dataset = dataframe.values
     control_data = dataset[:].astype(float)
-    return rgb_images, control_data
+    return np.asarray(rgb_images), np.asarray(control_data)
 
 
 def image_extract(folder_path, number_of_images=800):
@@ -172,7 +181,7 @@ def train(data_path, model, callbacks, target_model_name, num_epochs=50,
             print("Checkpoint: Saving model to "
                   + "../weights/checkpoints/checkpoint_"
                   + str(idx) + "_" + target_model_name + '.h5')
-            model.save("../weights/checkpoints/checkpoint_" + str(idx) + "_"
+            model.save("../weighlen(folders)ts/checkpoints/checkpoint_" + str(idx) + "_"
                        + target_model_name + '.h5')
             checkpoint = 0
 
@@ -184,26 +193,35 @@ def train(data_path, model, callbacks, target_model_name, num_epochs=50,
     model.save("../weights/"+target_model_name+'.h5')
 
 
-def train_with_all(data_path, model, target_model_name, nb_epochs=10,
+def train_with_all(data_path, val_path, model, target_model_name, nb_epochs=10,
                    checkpoint_stage=10, callbacks=None, save_model=None):
     folders = os.listdir(data_path)
     checkpoint = 0
     os.mkdir("../weights/"+target_model_name)
     history_file = open("../weights/"+target_model_name+"/history_file_"
                         + target_model_name+".txt", 'a')
+    val_history_file = open("../weights/"+target_model_name+"/val_history_file_"
+                        + target_model_name+".txt", 'a')
+
+    x_val, y_val = obtain_data(val_path)
     for idx, folder in enumerate(folders):
         print("Obtaining data: {}/{}".format(idx, len(folders) - 1))
         x_data, y_data = obtain_episode_data(
             data_path+"/"+folder, header_names=DATA_HEADERS)
-        x_data = np.asarray(x_data)
-        y_data = np.asarray(y_data)
-
-        history = model.fit([x_data], [y_data[..., 0],
-                                       y_data[..., 1]],
-                            epochs=nb_epochs, callbacks=callbacks)
-
+        # time_start = time.process_time()
+        history = model.fit([x_data],
+                            [y_data[..., 0],
+                            y_data[..., 1]],
+                            validation_data= ([x_val],
+                                                [y_val[..., 0],
+                                                y_val[..., 1]]),
+                            epochs=nb_epochs,
+                            callbacks=callbacks)
+        # elapsed = time.process_time() - time_start
+        # print(elapsed)
         checkpoint += 1
         history_file.write(str(history.history['loss'])+"\n")
+        val_history_file.write(str(history.history['val_loss'])+"\n")
         if checkpoint == checkpoint_stage:
             printc("Checkpoint: Saving model to " + "../weights/"+target_model_name+"/checkpoint_"
                    + str(idx) + "_" + target_model_name + '.h5', 'okgreen')
@@ -231,7 +249,7 @@ def main():
 
         # tensorboard_cb = keras.callbacks.TensorBoard(log_dir='./graph', histogram_freq=0,
         #           write_graph=True, write_images=True)
-        stop = EarlyStopping(monitor='loss', min_delta=0.0001, patience=5, verbose=1,
+        stop = EarlyStopping(monitor='val_loss', min_delta=0.001, patience=5, verbose=1,
         mode='auto')
         # checkpointer = ModelCheckpoint(filepath='../weights/checkpoint.hdf5', verbose=1,
         #                                save_best_only=True)
@@ -242,7 +260,7 @@ def main():
         if USE_MULTI is True:
             parallel_model, model = network.create_model(model_params=param,
             multi_gpu=USE_MULTI, gpus=gpus)
-            train_with_all(DATASET_PATH,
+            train_with_all(DATASET_PATH, VALSET_PATH,
                             target_model_name=name,
                             model=parallel_model,
                             save_model=model,
@@ -252,7 +270,7 @@ def main():
         else:
             model = network.create_model(model_params=param,
             multi_gpu=USE_MULTI, gpus=gpus)
-            train_with_all(DATASET_PATH,
+            train_with_all(DATASET_PATH, VALSET_PATH,
                             target_model_name=name,
                             model=model,
                             save_model=model,

@@ -1,4 +1,5 @@
 import keras
+import keras.backend as K
 from keras import optimizers
 from keras.applications.mobilenetv2 import MobileNetV2, preprocess_input
 from keras.callbacks import ModelCheckpoint, EarlyStopping
@@ -12,6 +13,16 @@ from coloured_print import printc
 
 IMG_WIDTH = 224
 IMG_HEIGHT = 224
+
+def euclidean_distance_loss(y_true, y_pred):
+    """
+    Euclidean distance loss
+    https://en.wikipedia.org/wiki/Euclidean_distance
+    :param y_true: TensorFlow/Theano tensor
+    :param y_pred: TensorFlow/Theano tensor of the same shape as y_true
+    :return: float
+    """
+    return K.sqrt(K.sum(K.square(y_pred - y_true), axis=-1, keepdims=True) + 0.0001)
 
 # params are [lr, d_1, d_2, d_3, dr]
 
@@ -67,13 +78,11 @@ def create_model(model_params=[0.001], multi_gpu=False, gpus=2):
     if multi_gpu is True:
         printc("{} GPUs".format(gpus), 'okgreen')
         parallel_model = multi_gpu_model(model, gpus=gpus)
-        parallel_model.compile(optimizer=adam, loss='mean_squared_error',
-                        metrics=['mse'])
+        parallel_model.compile(optimizer=adam, loss=euclidean_distance_loss)
     else:
         printc("a single GPU")
 
-    model.compile(optimizer=adam, loss='mean_squared_error',
-                    metrics=['mse'])
+    model.compile(optimizer=adam, loss=euclidean_distance_loss)
 
     model.summary()
 
