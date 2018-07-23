@@ -237,11 +237,13 @@ def train_with_all(data_path, val_path, model, target_model_name, nb_epochs=10,
 def main():
     gpus = digit_counter(os.environ["CUDA_VISIBLE_DEVICES"])[0]
 
-    params = [[0.001, 320, 40, 8, 0.6]]
-    # [0.001, 160, 20, 4, 0.6],
-    # [0.001, 80, 10, 2, 0.6],
-    # [0.001, 960, 120, 24, 0.6],
-    # [0.001, 1280, 160, 32, 0.6],
+    params = [
+    [0.001, 80, 10, 2, 0.6],
+    [0.001, 320, 40, 8, 0.6],
+    [0.001, 160, 20, 4, 0.6],
+    [0.001, 640, 80, 16, 0.6],
+    [0.001, 960, 120, 24, 0.6],
+    [0.001, 1280, 160, 32, 0.6]]
     # [0.001, 1600, 200, 40, 0.6]]
 
     for id, param in enumerate(params):
