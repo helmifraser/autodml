@@ -63,8 +63,8 @@ from keras.applications.mobilenetv2 import preprocess_input
 from keras import backend as K
 
 
-WINDOW_WIDTH = 800
-WINDOW_HEIGHT = 600
+WINDOW_WIDTH = 224
+WINDOW_HEIGHT = 224
 MINI_WINDOW_WIDTH = 320
 MINI_WINDOW_HEIGHT = 180
 
@@ -216,18 +216,18 @@ class CarlaGame(object):
         measurements, sensor_data = self.client.read_data()
 
         self._main_image = sensor_data.get('CameraRGB', None)
-        self._mini_view_image1 = sensor_data.get('CameraDepth', None)
-        self._mini_view_image2 = sensor_data.get('CameraSemSeg', None)
-        self._lidar_measurement = sensor_data.get('Lidar32', None)
+        # self._mini_view_image1 = sensor_data.get('CameraDepth', None)
+        # self._mini_view_image2 = sensor_data.get('CameraSemSeg', None)
+        # self._lidar_measurement = sensor_data.get('Lidar32', None)
 
 
         im_rgb = image_converter.to_rgb_array(self._main_image)
-        im_rgb = scipy.misc.imresize(im_rgb, size=(224,224))
+        # im_rgb = scipy.misc.imresize(im_rgb, size=(224,224))
         im_rgb = np.expand_dims(im_rgb, axis=0)
-        im_rgb = im_rgb*(2./255) - 1
+        im_rgb = im_rgb*(2./256) - 1
         # im_rgb = preprocess_input(im_rgb)
         # print("{}, {}".format(type(im_rgb), np.shape(im_rgb)))
-        print(im_rgb)
+        # print(im_rgb)
         output = driving_model.predict(im_rgb)
         print(output)
 
