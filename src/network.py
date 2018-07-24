@@ -10,6 +10,7 @@ from keras.preprocessing.image import ImageDataGenerator, img_to_array, load_img
 from keras.utils.training_utils import multi_gpu_model
 
 from coloured_print import printc
+# import mobilenet_v2_noname
 
 IMG_WIDTH = 224
 IMG_HEIGHT = 224
@@ -26,17 +27,33 @@ def euclidean_distance_loss(y_true, y_pred):
 
 # params are [lr, d_1, d_2, d_3, dr]
 
-def create_model(model_params=[0.001], multi_gpu=False, gpus=2):
+def create_model(model_params=[0.001], seg = False, multi_gpu=False, gpus=2):
     img = Input(shape=(IMG_WIDTH, IMG_HEIGHT, 3), name='img')
     mobilenet = MobileNetV2(input_shape=(IMG_WIDTH, IMG_HEIGHT, 3), alpha=1.0,
-                            depth_multiplier=1, include_top=False,
-                            weights='imagenet', pooling='max')(img)
-    # mobilenet.trainable = False
+                            depth_multiplier=1, include_top=False, pooling='max')(img)
+
+    img_seg = []
+    mobilenet_seg = []
+    x = []
+    if seg is True:
+        img_seg = Input(shape=(IMG_WIDTH, IMG_HEIGHT, 3), name='img_seg')
+        mobilenet_seg = MobileNetV2(input_shape=(IMG_WIDTH, IMG_HEIGHT, 3), alpha=1.0,
+                                depth_multiplier=1, include_top=False,
+                                weights='imagenet', pooling='max')(img_seg)
+        # print(mobilenet_seg)
+        # for layers in mobilenet_seg:
+        #     # mobilenet_seg.name="mobilenet_seg"
+        #     print(layers)
+        x = keras.layers.concatenate([mobilenet_seg, mobilenet])
 
     # Default params
     model = []
     if len(model_params) == 1:
-        x = Dense(640, input_shape=(1, 1280), activation='relu')(mobilenet)
+        if seg is True:
+            x = Dense(640, activation='relu')(x)
+        else:
+            x = Dense(640, input_shape=(1, 1280), activation='relu')(mobilenet)
+
         x = Dropout(0.2)(x)
         x = Dense(80, activation='relu')(x)
         x = Dropout(0.2)(x)
@@ -55,7 +72,12 @@ def create_model(model_params=[0.001], multi_gpu=False, gpus=2):
         print("Dense_3:", end=''); printc(" {}".format(model_params[3]), 'okgreen')
         print("Dropout rate:", end=''); printc(" {}".format(model_params[4]), 'okgreen')
         print(" ")
-        x = Dense(model_params[1], input_shape=(1, 1280), activation='relu')(mobilenet)
+        if seg is True:
+            x = Dense(model_params[1], activation='relu')(x)
+        else:
+            x = Dropout(model_params[4])(mobilenet)
+            x = Dense(model_params[1], input_shape=(1, 1280), activation='relu')(x)
+
         x = Dropout(model_params[4])(x)
         x = Dense(model_params[2], activation='relu')(x)
         x = Dropout(model_params[4])(x)
@@ -69,7 +91,7 @@ def create_model(model_params=[0.001], multi_gpu=False, gpus=2):
         printc("Error: malformed model_params argument. Expected size 5 got size {}".format(len(model_params)))
 
     for layers in model.layers[:2]:
-        layers.trainable = False
+        layers.trainable = True
 
     adam = optimizers.Adam(lr=model_params[0])
 

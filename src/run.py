@@ -4,6 +4,7 @@ import pandas as pd
 import time
 from datetime import datetime
 import argparse
+import random
 
 import keras
 from keras import optimizers
@@ -52,19 +53,24 @@ def obtain_data(data_path):
     folders = os.listdir(data_path)
     # x_data = [None] * len(folders)
     # y_data = [None] * len(folders)
+    # limit = len(folders)
+    limit = 1
 
-    x_data = np.zeros((600*len(folders), 224, 224, 3))
-    y_data = np.zeros((600*len(folders), 3))
+    x_data = np.zeros((600*(limit+1), 224, 224, 3))
+    y_data = np.zeros((600*(limit+1), 3))
 
 
     print("Within '{}', I found {} folders: {}".format(
         data_path, len(folders), folders))
-
     for idx, folder in enumerate(folders):
+        if idx > limit:
+            break
+        choose = random.choice(folders)
+
         print("Fetching episode {} of {}: {}".format(
-            idx, len(folders) - 1, folder))
+            idx, len(folders) - 1, choose))
         x_ep, y_ep = obtain_episode_data(
-            data_path+"/"+folder, header_names=DATA_HEADERS)
+            data_path+"/"+choose, header_names=DATA_HEADERS)
         x_data[idx*600:600 + (idx*600)] = x_ep
         y_data[idx*600:600 + (idx*600)] = y_ep
 
@@ -75,10 +81,23 @@ def obtain_data(data_path):
 
 def obtain_episode_data(folder_path, seg=False, delim=' ', header_names=None,
                         columns_to_use=COLS_TO_USE):
-    # Obtain images i.e x data
     rgb_path = folder_path+"/CameraRGB"
+    seg_path = folder_path+"/CameraSemSeg"
     rgb_images = []
     seg_images = []
+
+    # Obtain y data
+
+    for filename in os.listdir(folder_path):
+        if filename.endswith("_episode.txt"):
+            dataframe = pd.read_csv(folder_path+"/"+filename,
+            delimiter=delim, header=None,
+            usecols=columns_to_use)
+
+    dataset = dataframe.values
+    control_data = dataset[:].astype(float)
+
+    # Obtain images i.e x data
 
     if os.path.isdir(rgb_path):
         rgb_images = image_extract(rgb_path)
@@ -86,23 +105,16 @@ def obtain_episode_data(folder_path, seg=False, delim=' ', header_names=None,
         printc("Error:- folder '{}' not found".format(rgb_path))
 
     if seg == True:
-        seg_path = folder_path+"/CameraSemSeg"
         if os.path.isdir(seg_path):
             # files_seg = sum(os.path.isdir(i) for i in os.listdir(seg_path))
             seg_images = image_extract(seg_path)
+            return  np.asarray(rgb_images), \
+                    np.asarray(seg_images), \
+                    np.asarray(control_data)
+
         else:
             printc("Error:- folder '{}' not found".format(seg_path))
 
-    # Obtain y data
-
-    for filename in os.listdir(folder_path):
-        if filename.endswith("_episode.txt"):
-            dataframe = pd.read_csv(folder_path+"/"+filename,
-                                    delimiter=delim, header=None,
-                                    usecols=columns_to_use)
-
-    dataset = dataframe.values
-    control_data = dataset[:].astype(float)
     return np.asarray(rgb_images), np.asarray(control_data)
 
 
@@ -203,11 +215,11 @@ def train_with_all(data_path, val_path, model, target_model_name, nb_epochs=10,
     val_history_file = open("../weights/"+target_model_name+"/val_history_file_"
                         + target_model_name+".txt", 'a')
 
-    x_val, y_val = obtain_data(val_path)
     for idx, folder in enumerate(folders):
+        x_val, y_val = obtain_data(val_path)
         print("Obtaining data: {}/{}".format(idx, len(folders) - 1))
-        x_data, y_data = obtain_episode_data(
-            data_path+"/"+folder, header_names=DATA_HEADERS)
+        x_data, x_seg, y_data = obtain_episode_data(
+            data_path+"/"+folder, seg = True, header_names=DATA_HEADERS)
         # time_start = time.process_time()
         history = model.fit([x_data],
                             [y_data[..., 0],
@@ -216,7 +228,8 @@ def train_with_all(data_path, val_path, model, target_model_name, nb_epochs=10,
                                                 [y_val[..., 0],
                                                 y_val[..., 1]]),
                             epochs=nb_epochs,
-                            callbacks=callbacks)
+                            callbacks=callbacks,
+                            )
         # elapsed = time.process_time() - time_start
         # print(elapsed)
         checkpoint += 1
@@ -238,20 +251,20 @@ def main():
     gpus = digit_counter(os.environ["CUDA_VISIBLE_DEVICES"])[0]
 
     params = [
-    [0.001, 80, 10, 2, 0.6],
-    [0.001, 320, 40, 8, 0.6],
-    [0.001, 160, 20, 4, 0.6],
-    [0.001, 640, 80, 16, 0.6],
-    [0.001, 960, 120, 24, 0.6],
-    [0.001, 1280, 160, 32, 0.6]]
-    # [0.001, 1600, 200, 40, 0.6]]
+    # [0.001, 80, 10, 2, 0.6],
+    # [0.001, 320, 40, 8, 0.6],
+    # [0.001, 160, 20, 4, 0.6],
+    [0.001, 100, 50, 10, 0.6],
+    [0.001, 200, 100, 20, 0.6],
+    [0.001, 400, 200, 40, 0.6],
+    [0.001, 1280, 640, 40, 0.6]]
 
     for id, param in enumerate(params):
-        name = str(param) + str(datetime.now()).replace(" ", "_")
+        name = str(param).replace(" ", "_") + str(datetime.now()).replace(" ", "_")
 
         # tensorboard_cb = keras.callbacks.TensorBoard(log_dir='./graph', histogram_freq=0,
         #           write_graph=True, write_images=True)
-        stop = EarlyStopping(monitor='val_loss', min_delta=0.001, patience=5, verbose=1,
+        stop = EarlyStopping(monitor='loss', min_delta=0.001, patience=5, verbose=1,
         mode='auto')
         # checkpointer = ModelCheckpoint(filepath='../weights/checkpoint.hdf5', verbose=1,
         #                                save_best_only=True)
@@ -260,23 +273,29 @@ def main():
         callbacks = [history, stop]
 
         if USE_MULTI is True:
-            parallel_model, model = network.create_model(model_params=param,
-            multi_gpu=USE_MULTI, gpus=gpus)
+            parallel_model, model = network.create_model(
+                            model_params=param,
+                            seg = False,
+                            multi_gpu=USE_MULTI,
+                            gpus=gpus)
             train_with_all(DATASET_PATH, VALSET_PATH,
                             target_model_name=name,
                             model=parallel_model,
                             save_model=model,
-                            nb_epochs=20,
+                            nb_epochs=200,
                             callbacks=callbacks)
 
         else:
-            model = network.create_model(model_params=param,
-            multi_gpu=USE_MULTI, gpus=gpus)
+            model = network.create_model(
+                            model_params=param,
+                            seg = False,
+                            multi_gpu=USE_MULTI,
+                            gpus=gpus)
             train_with_all(DATASET_PATH, VALSET_PATH,
                             target_model_name=name,
                             model=model,
                             save_model=model,
-                            nb_epochs=20,
+                            nb_epochs=200,
                             callbacks=callbacks)
 
             printc("Param set: {} done".format(id))
