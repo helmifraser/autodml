@@ -15,7 +15,7 @@ from keras.models import Model, load_model
 from keras.preprocessing import image
 from keras.preprocessing.image import ImageDataGenerator, img_to_array, load_img
 
-# from scipy.misc import imsave
+from scipy.misc import imsave, pilutil
 
 from loss_history import LossHistory
 import network
@@ -48,34 +48,42 @@ DATA_HEADERS = ["frame_no", "steer", "throttle", "brake", "reverse"]
 COLS_TO_USE = [1, 2, 3]
 
 
-def obtain_data(data_path):
+def obtain_data(data_path, seg = False):
     """Returns all data in folder. Path is top level of data i.e ../dataset/train"""
     folders = os.listdir(data_path)
+    random.shuffle(folders)
     # x_data = [None] * len(folders)
     # y_data = [None] * len(folders)
     # limit = len(folders)
     limit = 1
 
-    x_data = np.zeros((600*(limit+1), 224, 224, 3))
-    y_data = np.zeros((600*(limit+1), 3))
-
+    x_data = np.zeros((570*(limit+1), 224, 224, 3))
+    x_seg = np.zeros((570*(limit+1), 224, 224, 3))
+    y_data = np.zeros((570*(limit+1), 3))
 
     print("Within '{}', I found {} folders: {}".format(
         data_path, len(folders), folders))
     for idx, folder in enumerate(folders):
         if idx > limit:
             break
-        choose = random.choice(folders)
 
         print("Fetching episode {} of {}: {}".format(
-            idx, len(folders) - 1, choose))
-        x_ep, y_ep = obtain_episode_data(
-            data_path+"/"+choose, header_names=DATA_HEADERS)
-        x_data[idx*600:600 + (idx*600)] = x_ep
-        y_data[idx*600:600 + (idx*600)] = y_ep
+            idx, limit, folder))
+        x_ep, x_ep_seg, y_ep = obtain_episode_data(
+            data_path+"/"+folder, seg = seg, header_names=DATA_HEADERS)
+        x_data[idx*570:570 + (idx*570)] = x_ep
+        y_data[idx*570:570 + (idx*570)] = y_ep
 
+        if seg is True:
+            x_seg[idx*570:570 + (idx*570)] = x_ep_seg
 
     print("All done")
+
+    if seg is True:
+        return  np.asarray(x_data), \
+                np.asarray(x_seg), \
+                np.asarray(y_data)
+
     return np.asarray(x_data), np.asarray(y_data)
 
 
@@ -107,10 +115,10 @@ def obtain_episode_data(folder_path, seg=False, delim=' ', header_names=None,
     if seg == True:
         if os.path.isdir(seg_path):
             # files_seg = sum(os.path.isdir(i) for i in os.listdir(seg_path))
-            seg_images = image_extract(seg_path)
-            return  np.asarray(rgb_images), \
-                    np.asarray(seg_images), \
-                    np.asarray(control_data)
+            seg_images = image_extract(seg_path, seg = True)
+            return  np.asarray(rgb_images[30:]), \
+                    np.asarray(seg_images[30:]), \
+                    np.asarray(control_data[30:])
 
         else:
             printc("Error:- folder '{}' not found".format(seg_path))
@@ -118,7 +126,7 @@ def obtain_episode_data(folder_path, seg=False, delim=' ', header_names=None,
     return np.asarray(rgb_images), np.asarray(control_data)
 
 
-def image_extract(folder_path, number_of_images=800):
+def image_extract(folder_path, seg = False, number_of_images=800):
         images = [None] * number_of_images
 
         for filename in os.listdir(folder_path):
@@ -128,8 +136,14 @@ def image_extract(folder_path, number_of_images=800):
                 img = load_img(os.path.join(
                     folder_path, filename), target_size=(224, 224))
                 images[id] = img_to_array(img)
+                # print("Before {}".format(images[id]))
+
                 # images[id] = np.expand_dims(images[id], axis=0)
-                images[id] = preprocess_input(images[id])
+                if seg is False:
+                    images[id] = preprocess_input(images[id])
+                else:
+                    images[id] = (images[id]*2./12) - 1
+
                 # print(np.shape(images[id]))
                 # print("Shape: {}".format(np.shape(images[1])))
 
@@ -208,30 +222,86 @@ def train(data_path, model, callbacks, target_model_name, num_epochs=50,
 def train_with_all(data_path, val_path, model, target_model_name, nb_epochs=10,
                    checkpoint_stage=10, callbacks=None, save_model=None):
     folders = os.listdir(data_path)
-    checkpoint = 0
+    # random.shuffle(folders)
+
+    # Testing overfitting, train on same episode for all
+    folders.sort()
+
     os.mkdir("../weights/"+target_model_name)
+    history_file, val_history_file = create_history_files(target_model_name)
+
+    print("Training on {}".format(folders[0]))
+    x_data, x_seg, y_data = obtain_episode_data(
+        data_path+"/"+folders[0], seg = True, header_names=DATA_HEADERS)
+
+    history = fit_over_ep(model, target_model_name, nb_epochs, callbacks, [x_data, x_seg, y_data],
+                            val_path, 5, history_file, val_history_file)
+
+    # history = fit_over_folders(model, folders)
+
+    printc("Saving model to "+"../weights/"+target_model_name+"/twa_final_" +
+           target_model_name+'.h5', 'okgreen')
+    save_model.save("../weights/"+target_model_name+"/twa_final_"+target_model_name+'.h5')
+
+def create_history_files(target_model_name):
     history_file = open("../weights/"+target_model_name+"/history_file_"
                         + target_model_name+".txt", 'a')
     val_history_file = open("../weights/"+target_model_name+"/val_history_file_"
                         + target_model_name+".txt", 'a')
 
-    for idx, folder in enumerate(folders):
-        x_val, y_val = obtain_data(val_path)
-        print("Obtaining data: {}/{}".format(idx, len(folders) - 1))
-        x_data, x_seg, y_data = obtain_episode_data(
-            data_path+"/"+folder, seg = True, header_names=DATA_HEADERS)
-        # time_start = time.process_time()
-        history = model.fit([x_data],
+    return history_file, val_history_file
+
+def fit_over_ep(model, target_model_name, nb_epochs, callbacks, episode_data, val_path, iterations, history_file, val_history_file):
+    checkpoint = 0
+    history = []
+
+    x_data = episode_data[0]
+    x_seg = episode_data[1]
+    y_data = episode_data[2]
+
+    for i in range(iterations):
+        x_val, x_val_seg, y_val = obtain_data(val_path, seg = True)
+        history = model.fit([x_data, x_seg],
                             [y_data[..., 0],
                             y_data[..., 1]],
-                            validation_data= ([x_val],
+                            validation_data= ([x_val, x_val_seg],
                                                 [y_val[..., 0],
                                                 y_val[..., 1]]),
                             epochs=nb_epochs,
                             callbacks=callbacks,
                             )
-        # elapsed = time.process_time() - time_start
-        # print(elapsed)
+        checkpoint += 1
+        history_file.write(str(history.history['loss'])+"\n")
+        val_history_file.write(str(history.history['val_loss'])+"\n")
+        if checkpoint == 2:
+            printc("Checkpoint: Saving model to " + "../weights/"+target_model_name+"/checkpoint_"
+                   + str(i) + "_" + target_model_name + '.h5', 'okgreen')
+            if model is not None:
+                model.save("../weights/"+target_model_name+"/checkpoint_" + str(i) + "_"
+                                + target_model_name + '.h5')
+            checkpoint = 0
+
+    return history
+
+def fit_over_folders(model, folders, val_path, history_file, val_history_file):
+    checkpoint = 0
+    history = []
+
+    for idx, folder in enumerate(folders):
+        x_val, x_val_seg, y_val = obtain_data(val_path, seg = True)
+        print("Obtaining data: {}/{}".format(idx, len(folders) - 1))
+        x_data, x_seg, y_data = obtain_episode_data(
+            data_path+"/"+folder, seg = True, header_names=DATA_HEADERS)
+        # time_start = time.process_time()
+        history = model.fit([x_data, x_seg],
+                            [y_data[..., 0],
+                            y_data[..., 1]],
+                            validation_data= ([x_val, x_val_seg],
+                                                [y_val[..., 0],
+                                                y_val[..., 1]]),
+                            epochs=nb_epochs,
+                            callbacks=callbacks,
+                            )
         checkpoint += 1
         history_file.write(str(history.history['loss'])+"\n")
         val_history_file.write(str(history.history['val_loss'])+"\n")
@@ -243,9 +313,7 @@ def train_with_all(data_path, val_path, model, target_model_name, nb_epochs=10,
                                 + target_model_name + '.h5')
             checkpoint = 0
 
-    printc("Saving model to "+"../weights/"+target_model_name+"/twa_final_" +
-           target_model_name+'.h5', 'okgreen')
-    save_model.save("../weights/"+target_model_name+"/twa_final_"+target_model_name+'.h5')
+    return history
 
 def main():
     gpus = digit_counter(os.environ["CUDA_VISIBLE_DEVICES"])[0]
@@ -253,18 +321,18 @@ def main():
     params = [
     # [0.001, 80, 10, 2, 0.6],
     # [0.001, 320, 40, 8, 0.6],
-    # [0.001, 160, 20, 4, 0.6],
-    [0.001, 100, 50, 10, 0.6],
-    [0.001, 200, 100, 20, 0.6],
-    [0.001, 400, 200, 40, 0.6],
-    [0.001, 1280, 640, 40, 0.6]]
+    [0.001, 50, 10, 5, 0.01],
+    # [0.001, 100, 50, 10, 0.2]]
+    [0.001, 200, 100, 20, 0.4],
+    [0.001, 400, 200, 40, 0.4],
+    [0.001, 600, 300, 80, 0.4]]
 
     for id, param in enumerate(params):
         name = str(param).replace(" ", "_") + str(datetime.now()).replace(" ", "_")
 
         # tensorboard_cb = keras.callbacks.TensorBoard(log_dir='./graph', histogram_freq=0,
         #           write_graph=True, write_images=True)
-        stop = EarlyStopping(monitor='loss', min_delta=0.001, patience=5, verbose=1,
+        stop = EarlyStopping(monitor='loss', min_delta=0.001, patience=1, verbose=1,
         mode='auto')
         # checkpointer = ModelCheckpoint(filepath='../weights/checkpoint.hdf5', verbose=1,
         #                                save_best_only=True)
@@ -288,15 +356,16 @@ def main():
         else:
             model = network.create_model(
                             model_params=param,
-                            seg = False,
+                            seg = True,
                             multi_gpu=USE_MULTI,
                             gpus=gpus)
             train_with_all(DATASET_PATH, VALSET_PATH,
                             target_model_name=name,
                             model=model,
                             save_model=model,
-                            nb_epochs=200,
-                            callbacks=callbacks)
+                            nb_epochs=10,
+                            callbacks=callbacks,
+                            checkpoint_stage=2)
 
             printc("Param set: {} done".format(id))
             printc("Params: {}".format(param))

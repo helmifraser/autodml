@@ -23,7 +23,7 @@ def euclidean_distance_loss(y_true, y_pred):
     :param y_pred: TensorFlow/Theano tensor of the same shape as y_true
     :return: float
     """
-    return K.sqrt(K.sum(K.square(y_pred - y_true), axis=-1, keepdims=True) + 0.0001)
+    return K.sqrt(K.sum(K.square(y_pred - y_true), axis=-1, keepdims=True) + 0.000001)
 
 # params are [lr, d_1, d_2, d_3, dr]
 
@@ -38,12 +38,7 @@ def create_model(model_params=[0.001], seg = False, multi_gpu=False, gpus=2):
     if seg is True:
         img_seg = Input(shape=(IMG_WIDTH, IMG_HEIGHT, 3), name='img_seg')
         mobilenet_seg = MobileNetV2(input_shape=(IMG_WIDTH, IMG_HEIGHT, 3), alpha=1.0,
-                                depth_multiplier=1, include_top=False,
-                                weights='imagenet', pooling='max')(img_seg)
-        # print(mobilenet_seg)
-        # for layers in mobilenet_seg:
-        #     # mobilenet_seg.name="mobilenet_seg"
-        #     print(layers)
+                                depth_multiplier=1, include_top=False, pooling='max')(img_seg)
         x = keras.layers.concatenate([mobilenet_seg, mobilenet])
 
     # Default params
@@ -78,19 +73,19 @@ def create_model(model_params=[0.001], seg = False, multi_gpu=False, gpus=2):
             x = Dropout(model_params[4])(mobilenet)
             x = Dense(model_params[1], input_shape=(1, 1280), activation='relu')(x)
 
-        x = Dropout(model_params[4])(x)
+        # x = Dropout(model_params[4])(x)
         x = Dense(model_params[2], activation='relu')(x)
-        x = Dropout(model_params[4])(x)
+        # x = Dropout(model_params[4])(x)
         x = Dense(model_params[3], activation='relu')(x)
-        x = Dropout(model_params[4])(x)
-        steer = Dense(1, activation='tanh', name='steer')(x)
-        throttle = Dense(1, activation='tanh', name='throttle')(x)
+        # x = Dropout(model_params[4])(x)
+        steer = Dense(1, activation='linear', name='steer')(x)
+        throttle = Dense(1, activation='linear', name='throttle')(x)
         # brake = Dense(1, activation='tanh', name='brake')(x)
-        model = Model(inputs=img, outputs=[steer, throttle])
+        model = Model(inputs=[img, img_seg], outputs=[steer, throttle])
     else:
         printc("Error: malformed model_params argument. Expected size 5 got size {}".format(len(model_params)))
 
-    for layers in model.layers[:2]:
+    for layers in model.layers:
         layers.trainable = True
 
     adam = optimizers.Adam(lr=model_params[0])
