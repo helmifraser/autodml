@@ -174,6 +174,7 @@ class CarlaGame(object):
         self._map_view = None
         self._position = None
         self._agent_positions = None
+        self._enable_network_control = False
 
     def execute(self, driving_model):
         """Launch the PyGame."""
@@ -233,21 +234,22 @@ class CarlaGame(object):
         # self._lidar_measurement = sensor_data.get('Lidar32', None)
 
 
-        im_rgb = image_converter.to_rgb_array(self._main_image)
+        im_rgb = image_converter.to_rgb_array(self._main_image)[90:,:,:]
         # im_rgb = scipy.misc.imresize(im_rgb, size=(224,224))
         im_rgb = np.expand_dims(im_rgb, axis=0)
         im_rgb = im_rgb*(2./256) - 1
         # im_rgb = preprocess_input(im_rgb)
         # print("{}, {}".format(type(im_rgb), np.shape(im_rgb)))
-        # print(im_rgb)
+        # print(im_rgb)``
 
-        im_seg = image_converter.to_rgb_array(self._mini_view_image2)
+        im_seg = image_converter.to_rgb_array(self._mini_view_image2)[90:,:,:]
         # im_seg = scipy.misc.imresize(im_seg, size=(224,224))
         im_seg = np.expand_dims(im_seg, axis=0)
         im_seg = im_seg*(2./12) - 1
 
         output = driving_model.predict_on_batch([im_rgb, im_seg])
-        print("steer: {} throttle: {}".format(output[0][0], output[1][0]))
+        print("Network control: {} steer: {} throttle: {}".format(
+                    self._enable_network_control, output[0][0], output[1][0]))
 
         # Print measurements every second.
         if self._timer.elapsed_seconds_since_lap() > 1.0:
@@ -275,7 +277,7 @@ class CarlaGame(object):
             self._timer.lap()
 
         control = self._get_keyboard_control(pygame.key.get_pressed())
-        if control == 420:
+        if self._enable_network_control:
             control = self.pack_control_msg(output)
         # Set the player position
         if self._city_name is not None:
@@ -308,7 +310,7 @@ class CarlaGame(object):
         if keys[K_r]:
             return None
         if keys[K_LSHIFT]:
-            return 420
+            self._enable_network_control = not self._enable_network_control
         control = VehicleControl()
         if keys[K_LEFT] or keys[K_a]:
             control.steer = -1.0

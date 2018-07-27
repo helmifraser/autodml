@@ -57,9 +57,13 @@ def obtain_data(data_path, seg = False):
     # limit = len(folders)
     limit = 1
 
-    x_data = np.zeros((570*(limit+1), 224, 224, 3))
-    x_seg = np.zeros((570*(limit+1), 224, 224, 3))
-    y_data = np.zeros((570*(limit+1), 3))
+    # x_data = np.zeros((570*(limit+1), 224, 224, 3))
+    # x_seg = np.zeros((570*(limit+1), 224, 224, 3))
+    # y_data = np.zeros((570*(limit+1), 3))
+    x_data = []
+    x_seg = []
+    y_data = []
+
 
     print("Within '{}', I found {} folders: {}".format(
         data_path, len(folders), folders))
@@ -71,11 +75,12 @@ def obtain_data(data_path, seg = False):
             idx, limit, folder))
         x_ep, x_ep_seg, y_ep = obtain_episode_data(
             data_path+"/"+folder, seg = seg, header_names=DATA_HEADERS)
-        x_data[idx*570:570 + (idx*570)] = x_ep
-        y_data[idx*570:570 + (idx*570)] = y_ep
+        samples = np.shape(y_ep)[0]
+        x_data[idx*samples:samples + (idx*samples)] = x_ep
+        y_data[idx*samples:samples + (idx*samples)] = y_ep
 
         if seg is True:
-            x_seg[idx*570:570 + (idx*570)] = x_ep_seg
+            x_seg[idx*samples:samples + (idx*samples)] = x_ep_seg
 
     print("All done")
 
@@ -86,6 +91,12 @@ def obtain_data(data_path, seg = False):
 
     return np.asarray(x_data), np.asarray(y_data)
 
+def filter_control_data(data):
+    # get rid of frames where the car has stopped
+    idx = np.where(data[:, 1] > 0.1)
+    valid_data = data[idx]
+    idx = [i for i in idx[0]]
+    return valid_data, idx
 
 def obtain_episode_data(folder_path, seg=False, delim=' ', header_names=None,
                         columns_to_use=COLS_TO_USE):
@@ -104,24 +115,30 @@ def obtain_episode_data(folder_path, seg=False, delim=' ', header_names=None,
 
     dataset = dataframe.values
     control_data = dataset[:].astype(float)
+    control_data, idx = filter_control_data(control_data)
 
     # Obtain images i.e x data
 
     if os.path.isdir(rgb_path):
-        rgb_images = image_extract(rgb_path)
+        rgb_images = np.asarray(image_extract(rgb_path))
+        rgb_images = rgb_images[idx,]
+        print(np.shape(rgb_images))
     else:
         printc("Error:- folder '{}' not found".format(rgb_path))
 
     if seg == True:
         if os.path.isdir(seg_path):
-            # files_seg = sum(os.path.isdir(i) for i in os.listdir(seg_path))
-            seg_images = image_extract(seg_path, seg = True)
-            return  np.asarray(rgb_images[30:]), \
-                    np.asarray(seg_images[30:]), \
-                    np.asarray(control_data[30:])
-
+            seg_images = np.asarray(image_extract(seg_path, seg = seg))
+            seg_images = seg_images[idx,]
         else:
             printc("Error:- folder '{}' not found".format(seg_path))
+
+
+
+    if seg == True:
+        return  np.asarray(rgb_images[30:]), \
+                np.asarray(seg_images[30:]), \
+                np.asarray(control_data[30:])
 
     return np.asarray(rgb_images), np.asarray(control_data)
 
@@ -135,7 +152,7 @@ def image_extract(folder_path, seg = False, number_of_images=800):
                 id = int(filename[:pos])
                 img = load_img(os.path.join(
                     folder_path, filename), target_size=(224, 224))
-                images[id] = img_to_array(img)
+                images[id] = img_to_array(img)[90:,:,:]
                 # print("Before {}".format(images[id]))
 
                 # images[id] = np.expand_dims(images[id], axis=0)
@@ -218,7 +235,6 @@ def train(data_path, model, callbacks, target_model_name, num_epochs=50,
     print("Saving model to "+"../weights/"+target_model_name+'.h5')
     model.save("../weights/"+target_model_name+'.h5')
 
-
 def train_with_all(data_path, val_path, model, target_model_name, nb_epochs=10,
                    checkpoint_stage=10, callbacks=None, save_model=None):
     folders = os.listdir(data_path)
@@ -226,6 +242,7 @@ def train_with_all(data_path, val_path, model, target_model_name, nb_epochs=10,
 
     # Testing overfitting, train on same episode for all
     folders.sort()
+    print(folders)
 
     os.mkdir("../weights/"+target_model_name)
     history_file, val_history_file = create_history_files(target_model_name)
@@ -236,6 +253,14 @@ def train_with_all(data_path, val_path, model, target_model_name, nb_epochs=10,
 
     history = fit_over_ep(model, target_model_name, nb_epochs, callbacks, [x_data, x_seg, y_data],
                             val_path, 5, history_file, val_history_file)
+
+    # print("Training on {}".format(folders[66]))
+    # x_data, x_seg, y_data = obtain_episode_data(
+    #     data_path+"/"+folders[55], seg = True, header_names=DATA_HEADERS)
+    #
+    # history = fit_over_ep(model, target_model_name, nb_epochs, callbacks, [x_data, x_seg, y_data],
+    #                         val_path, 5, history_file, val_history_file)
+
 
     # history = fit_over_folders(model, folders)
 
@@ -321,11 +346,11 @@ def main():
     params = [
     # [0.001, 80, 10, 2, 0.6],
     # [0.001, 320, 40, 8, 0.6],
-    [0.001, 50, 10, 5, 0.01],
-    # [0.001, 100, 50, 10, 0.2]]
-    [0.001, 200, 100, 20, 0.4],
-    [0.001, 400, 200, 40, 0.4],
-    [0.001, 600, 300, 80, 0.4]]
+    # [0.001, 50, 10, 5, 0.01]]
+    [0.001, 100, 50, 10, 0.01],
+    [0.001, 200, 100, 20, 0.01],
+    [0.001, 400, 200, 40, 0.01],
+    [0.001, 600, 300, 80, 0.01]]
 
     for id, param in enumerate(params):
         name = str(param).replace(" ", "_") + str(datetime.now()).replace(" ", "_")

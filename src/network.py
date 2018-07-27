@@ -13,7 +13,7 @@ from coloured_print import printc
 # import mobilenet_v2_noname
 
 IMG_WIDTH = 224
-IMG_HEIGHT = 224
+IMG_HEIGHT = 134
 
 def euclidean_distance_loss(y_true, y_pred):
     """
@@ -28,16 +28,16 @@ def euclidean_distance_loss(y_true, y_pred):
 # params are [lr, d_1, d_2, d_3, dr]
 
 def create_model(model_params=[0.001], seg = False, multi_gpu=False, gpus=2):
-    img = Input(shape=(IMG_WIDTH, IMG_HEIGHT, 3), name='img')
-    mobilenet = MobileNetV2(input_shape=(IMG_WIDTH, IMG_HEIGHT, 3), alpha=1.0,
+    img = Input(shape=(IMG_HEIGHT, IMG_WIDTH, 3), name='img')
+    mobilenet = MobileNetV2(alpha=1.0,
                             depth_multiplier=1, include_top=False, pooling='max')(img)
 
     img_seg = []
     mobilenet_seg = []
     x = []
     if seg is True:
-        img_seg = Input(shape=(IMG_WIDTH, IMG_HEIGHT, 3), name='img_seg')
-        mobilenet_seg = MobileNetV2(input_shape=(IMG_WIDTH, IMG_HEIGHT, 3), alpha=1.0,
+        img_seg = Input(shape=(IMG_HEIGHT, IMG_WIDTH, 3), name='img_seg')
+        mobilenet_seg = MobileNetV2(alpha=1.0,
                                 depth_multiplier=1, include_top=False, pooling='max')(img_seg)
         x = keras.layers.concatenate([mobilenet_seg, mobilenet])
 
