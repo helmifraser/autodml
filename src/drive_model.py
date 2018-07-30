@@ -26,6 +26,7 @@ import os
 try:
     import pygame
     from pygame.locals import K_LSHIFT
+    from pygame.locals import K_RSHIFT
     from pygame.locals import K_DOWN
     from pygame.locals import K_LEFT
     from pygame.locals import K_RIGHT
@@ -248,7 +249,7 @@ class CarlaGame(object):
         im_seg = np.expand_dims(im_seg, axis=0)
         im_seg = im_seg*(2./12) - 1
 
-        output = driving_model.predict_on_batch([im_rgb, im_seg])
+        output = driving_model.predict_on_batch([im_rgb])
         print("Network control: {} steer: {} throttle: {}".format(
                     self._enable_network_control, output[0][0], output[1][0]))
 
@@ -312,6 +313,10 @@ class CarlaGame(object):
             return None
         if keys[K_LSHIFT]:
             self._enable_network_control = not self._enable_network_control
+        if keys[K_RSHIFT]:
+            self.player_start = np.random.randint(70)
+            return None
+
         control = VehicleControl()
         if keys[K_LEFT] or keys[K_a]:
             control.steer = -1.0

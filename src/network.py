@@ -74,15 +74,19 @@ def create_model(model_params=[0.001], seg = False, multi_gpu=False, gpus=2):
             x = Dropout(model_params[4])(mobilenet)
             x = Dense(model_params[1], input_shape=(1, 1280), activation='relu')(x)
 
-        x = Dropout(model_params[4])(x)
+        # x = Dropout(model_params[4])(x)
         x = Dense(model_params[2], activation='relu')(x)
-        x = Dropout(model_params[4])(x)
+        # x = Dropout(model_params[4])(x)
         x = Dense(model_params[3], activation='relu')(x)
         # x = Dropout(model_params[4])(x)
         steer = Dense(1, activation='linear', name='steer')(x)
         throttle = Dense(1, activation='linear', name='throttle')(x)
         # brake = Dense(1, activation='tanh', name='brake')(x)
-        model = Model(inputs=[img, img_seg], outputs=[steer, throttle])
+        if seg is True:
+            model = Model(inputs=[img, img_seg], outputs=[steer, throttle])
+        else:
+            model = Model(inputs=img, outputs=[steer, throttle])
+
     else:
         printc("Error: malformed model_params argument. Expected size 5 got size {}".format(len(model_params)))
 

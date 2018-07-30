@@ -456,17 +456,17 @@ def fit_over_folders(data_path, model, save_model, target_model_name,
             # x_val, x_val_seg, y_val = obtain_data(val_path, seg=True)
             if i == 0:
                 print("Obtaining data: {} {}/{}".format(folder, idx, len(folders) - 1))
-                x_data, x_seg, y_data = obtain_episode_data(
-                    data_path+"/"+folder, seg=True, header_names=DATA_HEADERS)
+                x_data, y_data = obtain_episode_data(
+                    data_path+"/"+folder, header_names=DATA_HEADERS)
 
-                x_aug, x_seg_aug, y_aug = augment_turns(x_data, y_data, x_seg)
+                x_aug, y_aug = augment_turns(x_data, y_data)
 
                 if np.shape(x_aug)[0] > 0:
                     x_data = np.append(x_data, x_aug, axis=0)
-                    x_seg = np.append(x_seg, x_seg_aug, axis=0)
+                    # x_seg = np.append(x_seg, x_seg_aug, axis=0)
                     y_data = np.append(y_data, y_aug, axis=0)
 
-            history = model.fit([x_data, x_seg],
+            history = model.fit([x_data],
                                 [y_data[..., 0],
                                  y_data[..., 1]],
                                 # validation_data=([x_val, x_val_seg],
@@ -496,16 +496,16 @@ def main():
         # [0.001, 80, 10, 2, 0.6],
         # [0.001, 320, 40, 8, 0.6],
         # [0.001, 50, 10, 5, 0.01]]
-        # [0.0001, 100, 50, 10, 0.5],
-    [0.001, 200, 100, 20, 0.01],
-    [0.001, 200, 100, 20, 0.05],
-    [0.001, 200, 100, 20, 0.1],
-    [0.001, 400, 200, 40, 0.01],
-    [0.001, 400, 200, 40, 0.05],
-    [0.001, 400, 200, 40, 0.1],
-    [0.001, 600, 300, 80, 0.01],
-    [0.001, 600, 300, 80, 0.05],
-    [0.001, 600, 300, 80, 0.1]]
+        [0.001, 100, 50, 10, 0.05]]
+    # [0.001, 200, 100, 20, 0.01],
+    # [0.001, 200, 100, 20, 0.05],
+    # [0.001, 200, 100, 20, 0.1],
+    # [0.001, 400, 200, 40, 0.01],
+    # [0.001, 400, 200, 40, 0.05],
+    # [0.001, 400, 200, 40, 0.1],
+    # [0.001, 600, 300, 80, 0.01],
+    # [0.001, 600, 300, 80, 0.05],
+    # [0.001, 600, 300, 80, 0.1]]
 
     # x_data, x_seg, y_data = obtain_episode_data(
     #     "/media/helmi/drive_3/carla_dataset/train/51_town_1", seg=True)
@@ -554,7 +554,7 @@ def main():
         else:
             model = network.create_model(
                             model_params=param,
-                            seg=True,
+                            seg=False,
                             multi_gpu=USE_MULTI,
                             gpus=gpus)
             train_with_all(DATASET_PATH, VALSET_PATH,
