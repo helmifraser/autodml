@@ -103,7 +103,7 @@ def make_carla_settings(args):
         NumberOfPedestrians=0,
         WeatherId=1,
         QualityLevel=args.quality_level)
-    settings.randomize_seeds()
+    # settings.randomize_seeds()
     camera0 = sensor.Camera('CameraRGB')
     camera0.set_image_size(WINDOW_WIDTH, WINDOW_HEIGHT)
     camera0.set_position(2.0, 0.0, 1.4)
@@ -175,6 +175,7 @@ class CarlaGame(object):
         self._position = None
         self._agent_positions = None
         self._enable_network_control = False
+        self.player_start = args.start
 
     def execute(self, driving_model):
         """Launch the PyGame."""
@@ -211,15 +212,15 @@ class CarlaGame(object):
         logging.debug('pygame started')
 
     def _on_new_episode(self):
-        self._carla_settings.randomize_seeds()
-        self._carla_settings.randomize_weather()
+        # self._carla_settings.randomize_seeds()
+        # self._carla_settings.randomize_weather()
         scene = self.client.load_settings(self._carla_settings)
         if self._display_map:
             self._city_name = scene.map_name
         number_of_player_starts = len(scene.player_start_spots)
-        player_start = np.random.randint(number_of_player_starts)
-        print('Starting new episode...')
-        self.client.start_episode(player_start)
+        # player_start = np.random.randint(number_of_player_starts)
+        print("Starting new episode at position {}".format(self.player_start))
+        self.client.start_episode(self.player_start)
         self._timer = Timer()
         self._is_on_reverse = False
 
@@ -437,6 +438,11 @@ def main():
         '-model', metavar='path',
         type=str,
         help='Path to driving model .h5 file')
+    argparser.add_argument(
+        '-start', metavar='pos',
+        type=int,
+        default=0,
+        help='Car starting position')
     argparser.add_argument(
         '-v', '--verbose',
         action='store_true',

@@ -68,14 +68,15 @@ def create_model(model_params=[0.001], seg = False, multi_gpu=False, gpus=2):
         print("Dropout rate:", end=''); printc(" {}".format(model_params[4]), 'okgreen')
         print(" ")
         if seg is True:
+            x = Dropout(model_params[4])(x)
             x = Dense(model_params[1], activation='relu')(x)
         else:
             x = Dropout(model_params[4])(mobilenet)
             x = Dense(model_params[1], input_shape=(1, 1280), activation='relu')(x)
 
-        # x = Dropout(model_params[4])(x)
+        x = Dropout(model_params[4])(x)
         x = Dense(model_params[2], activation='relu')(x)
-        # x = Dropout(model_params[4])(x)
+        x = Dropout(model_params[4])(x)
         x = Dense(model_params[3], activation='relu')(x)
         # x = Dropout(model_params[4])(x)
         steer = Dense(1, activation='linear', name='steer')(x)
@@ -99,7 +100,7 @@ def create_model(model_params=[0.001], seg = False, multi_gpu=False, gpus=2):
     else:
         printc("a single GPU")
 
-    model.compile(optimizer=adam, loss=euclidean_distance_loss)
+    model.compile(optimizer=adam, loss=euclidean_distance_loss, loss_weights=[1, 0.4])
 
     model.summary()
 
