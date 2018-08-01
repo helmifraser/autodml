@@ -55,6 +55,15 @@ from carla.settings import CarlaSettings
 from carla.tcp import TCPConnectionError
 from carla.util import print_over_same_line
 
+import tensorflow as tf
+config = tf.ConfigProto()
+# config.gpu_options.per_process_gpu_memory_fraction = 0.75
+config.gpu_options.allow_growth = True
+session = tf.Session(config=config)
+
+from keras.backend.tensorflow_backend import set_session
+set_session(session)
+
 import keras
 import numpy as np
 import scipy.misc
@@ -82,13 +91,18 @@ def euclidean_distance_loss(y_true, y_pred):
     """
     return K.sqrt(K.sum(K.square(y_pred - y_true), axis=-1, keepdims=True) + 0.0001)
 
+def atan(x):
+    return tf.atan(x)
+
 def return_driving_model(model_path):
     if os.path.isfile(model_path) is not True:
         print("Model {} not found!")
         sys.exit(0)
 
     print("Loading model: {}".format(model_path[model_path.rfind("/")+1:]))
-    model = load_model(model_path, custom_objects={'euclidean_distance_loss': euclidean_distance_loss, 'relu6': K.relu})
+    # model = load_model(model_path, custom_objects={'euclidean_distance_loss': euclidean_distance_loss, 'relu6': K.relu})
+    model = load_model(model_path, custom_objects={'atan':atan})
+
     model.summary()
 
     return model
@@ -115,11 +129,11 @@ def make_carla_settings(args):
     # camera1.set_position(2.0, 0.0, 1.4)
     # camera1.set_rotation(0.0, 0.0, 0.0)
     # settings.add_sensor(camera1)
-    camera2 = sensor.Camera('CameraSemSeg', PostProcessing='SemanticSegmentation')
-    camera2.set_image_size(WINDOW_WIDTH, WINDOW_HEIGHT)
-    camera2.set_position(2.0, 0.0, 1.4)
-    camera2.set_rotation(0.0, 0.0, 0.0)
-    settings.add_sensor(camera2)
+    # camera2 = sensor.Camera('CameraSemSeg', PostProcessing='SemanticSegmentation')
+    # camera2.set_image_size(WINDOW_WIDTH, WINDOW_HEIGHT)
+    # camera2.set_position(2.0, 0.0, 1.4)
+    # camera2.set_rotation(0.0, 0.0, 0.0)
+    # settings.add_sensor(camera2)
     # if args.lidar:
     #     lidar = sensor.Lidar('Lidar32')
     #     lidar.set_position(0, 0, 2.5)
@@ -244,12 +258,12 @@ class CarlaGame(object):
         # print("{}, {}".format(type(im_rgb), np.shape(im_rgb)))
         # print(im_rgb)``
 
-        im_seg = image_converter.to_rgb_array(self._mini_view_image2)[90:,:,:]
-        # im_seg = scipy.misc.imresize(im_seg, size=(224,224))
-        im_seg = np.expand_dims(im_seg, axis=0)
-        im_seg = im_seg*(2./12) - 1
+        # im_seg = image_converter.to_rgb_array(self._mini_view_image2)[90:,:,:]
+        # # im_seg = scipy.misc.imresize(im_seg, size=(224,224))
+        # im_seg = np.expand_dims(im_seg, axis=0)
+        # im_seg = im_seg*(2./12) - 1
 
-        output = driving_model.predict_on_batch([im_rgb])
+        output = driving_model.predict([im_rgb])
         print("Network control: {} steer: {} throttle: {}".format(
                     self._enable_network_control, output[0][0], output[1][0]))
 
@@ -373,10 +387,10 @@ class CarlaGame(object):
         gap_x = (WINDOW_WIDTH - 2 * MINI_WINDOW_WIDTH) / 3
         mini_image_y = WINDOW_HEIGHT - MINI_WINDOW_HEIGHT - gap_x
 
-        # if self._main_image is not None:
-        #     array = image_converter.to_rgb_array(self._main_image)
-        #     surface = pygame.surfarray.make_surface(array.swapaxes(0, 1))
-        #     self._display.blit(surface, (0, 0))
+        if self._main_image is not None:
+            array = image_converter.to_rgb_array(self._main_image)
+            surface = pygame.surfarray.make_surface(array.swapaxes(0, 1))
+            self._display.blit(surface, (0, 0))
 
         if self._mini_view_image1 is not None:
             array = image_converter.depth_to_logarithmic_grayscale(self._mini_view_image1)

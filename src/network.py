@@ -3,11 +3,12 @@ import keras.backend as K
 from keras import optimizers
 from keras.applications.mobilenetv2 import MobileNetV2, preprocess_input
 from keras.callbacks import ModelCheckpoint, EarlyStopping
-from keras.layers import Dense, Dropout, Input
+from keras.layers import Activation, Dense, Dropout, Input
 from keras.models import Model, load_model
 from keras.preprocessing import image
 from keras.preprocessing.image import ImageDataGenerator, img_to_array, load_img
 from keras.utils.training_utils import multi_gpu_model
+from keras.layers.normalization import BatchNormalization
 
 from coloured_print import printc
 # import mobilenet_v2_noname
@@ -43,52 +44,45 @@ def create_model(model_params=[0.001], seg = False, multi_gpu=False, gpus=2):
 
     # Default params
     model = []
-    if len(model_params) == 1:
-        if seg is True:
-            x = Dense(640, activation='relu')(x)
-        else:
-            x = Dense(640, input_shape=(1, 1280), activation='relu')(mobilenet)
-
-        x = Dropout(0.2)(x)
-        x = Dense(80, activation='relu')(x)
-        x = Dropout(0.2)(x)
-        x = Dense(16, activation='relu')(x)
-        x = Dropout(0.2)(x)
-        steer = Dense(1, activation='tanh', name='steer')(x)
-        throttle = Dense(1, activation='tanh', name='throttle')(x)
-        # brake = Dense(1, activation='tanh', name='brake')(x)
-        model = Model(inputs=img, outputs=[steer, throttle])
-    elif len(model_params) == 5:
-        print(" ")
-        print("Params:")
-        print("Learning rate:", end=''); printc(" {}".format(model_params[0]), 'okgreen')
-        print("Dense_1:", end=''); printc(" {}".format(model_params[1]), 'okgreen')
-        print("Dense_2:", end=''); printc(" {}".format(model_params[2]), 'okgreen')
-        print("Dense_3:", end=''); printc(" {}".format(model_params[3]), 'okgreen')
-        print("Dropout rate:", end=''); printc(" {}".format(model_params[4]), 'okgreen')
-        print(" ")
-        if seg is True:
-            x = Dropout(model_params[4])(x)
-            x = Dense(model_params[1], activation='relu')(x)
-        else:
-            x = Dropout(model_params[4])(mobilenet)
-            x = Dense(model_params[1], input_shape=(1, 1280), activation='relu')(x)
-
-        # x = Dropout(model_params[4])(x)
-        x = Dense(model_params[2], activation='relu')(x)
-        # x = Dropout(model_params[4])(x)
-        x = Dense(model_params[3], activation='relu')(x)
-        # x = Dropout(model_params[4])(x)
-        steer = Dense(1, activation='linear', name='steer')(x)
-        throttle = Dense(1, activation='linear', name='throttle')(x)
-        # brake = Dense(1, activation='tanh', name='brake')(x)
-        if seg is True:
-            model = Model(inputs=[img, img_seg], outputs=[steer, throttle])
-        else:
-            model = Model(inputs=img, outputs=[steer, throttle])
-
+    print(" ")
+    print("Params:")
+    print("Learning rate:", end=''); printc(" {}".format(model_params[0]), 'okgreen')
+    print("Dense_1:", end=''); printc(" {}".format(model_params[1]), 'okgreen')
+    print("Dense_2:", end=''); printc(" {}".format(model_params[2]), 'okgreen')
+    print("Dense_3:", end=''); printc(" {}".format(model_params[3]), 'okgreen')
+    print("Dropout rate:", end=''); printc(" {}".format(model_params[4]), 'okgreen')
+    print(" ")
+    if seg is True:
+        x = Dropout(model_params[4])(x)
+        x = Dense(model_params[1], use_bias=False)(x)
+        x = Activation('relu')(x)
+        x = BatchNormalization()(x)
     else:
-        printc("Error: malformed model_params argument. Expected size 5 got size {}".format(len(model_params)))
+        x = Dropout(model_params[4])(mobilenet)
+        x = Dense(model_params[1], input_shape=(1, 1280), use_bias=False)(x)
+        x = Activation('relu')(x)
+        x = BatchNormalization()(x)
+
+    # x = Dropout(model_params[4])(x)
+    x = Dense(model_params[2], use_bias=False)(x)
+    x = Activation('relu')(x)
+    x = BatchNormalization()(x)
+    # x = Dropout(model_params[4])(x)
+    x = Dense(model_params[3], use_bias=False)(x)
+    x = Activation('relu')(x)
+    x = BatchNormalization()(x)
+    # x = Dropout(model_params[4])(x)
+    steer = Dense(1, use_bias=False)(x)
+    steer = Activation('tanh')(steer)
+    steer = BatchNormalization(name='steer')(steer)
+    throttle = Dense(1, use_bias=False)(x)
+    throttle = Activation('tanh')(throttle)
+    throttle = BatchNormalization(name='throttle')(throttle)
+    # brake = Dense(1, activation='tanh', name='brake')(x)
+    if seg is True:
+        model = Model(inputs=[img, img_seg], outputs=[steer, throttle])
+    else:
+        model = Model(inputs=img, outputs=[steer, throttle])
 
     for layers in model.layers:
         layers.trainable = True
@@ -104,7 +98,7 @@ def create_model(model_params=[0.001], seg = False, multi_gpu=False, gpus=2):
     else:
         printc("a single GPU")
 
-    model.compile(optimizer=adam, loss=euclidean_distance_loss, loss_weights=[1, 0.4])
+    model.compile(optimizer=adam, loss=euclidean_distance_loss, loss_weights=[1, 0.2])
 
     model.summary()
 

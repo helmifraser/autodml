@@ -6,6 +6,15 @@ from datetime import datetime
 import argparse
 import random
 
+import tensorflow as tf
+config = tf.ConfigProto()
+# config.gpu_options.per_process_gpu_memory_fraction = 0.75
+config.gpu_options.allow_growth = True
+session = tf.Session(config=config)
+
+from keras.backend.tensorflow_backend import set_session
+set_session(session)
+
 import keras
 from keras import optimizers
 from keras.applications.mobilenetv2 import MobileNetV2, preprocess_input
@@ -23,7 +32,7 @@ from skimage.transform import rotate
 from skimage.util import random_noise
 
 from loss_history import LossHistory
-import network
+import network_2
 from coloured_print import printc
 
 np.random.seed(420)  # for high reproducibility
@@ -77,8 +86,12 @@ def obtain_data(data_path, seg=False):
 
         print("Fetching episode {} of {}: {}".format(
             idx, limit, folder))
-        x_ep, x_ep_seg, y_ep = obtain_episode_data(
-            data_path+"/"+folder, seg=seg, header_names=DATA_HEADERS)
+        if seg:
+            x_ep, x_ep_seg, y_ep = obtain_episode_data(
+                data_path+"/"+folder, seg=seg, header_names=DATA_HEADERS)
+        else:
+            x_ep, y_ep = obtain_episode_data(
+                data_path+"/"+folder, header_names=DATA_HEADERS)
         samples = np.shape(y_ep)[0]
         x_data[idx*samples:samples + (idx*samples)] = x_ep
         y_data[idx*samples:samples + (idx*samples)] = y_ep
@@ -104,9 +117,49 @@ def filter_control_data(data):
     return valid_data, idx
 
 
+def return_straight_ids(data, thresh=0.003):
+    return np.where(abs(data[:, 0]) < thresh)
+
+
 def return_turn_ids(data, thresh=0.035):
     return np.where(abs(data[:, 0]) > thresh)
 
+
+def strip_straight(x_data, y_data, rate=0.5):
+    turns_idx = return_straight_ids(y_data)
+    # print(np.shape(turns_idx))
+    # print(turns_idx)
+
+    if len(turns_idx[0]) > 2:
+        np.random.shuffle(turns_idx[0])
+        # print(turns_idx)
+        choice = int(len(turns_idx[0])*rate)
+
+        ordered = []
+        for counter, id in enumerate(turns_idx[0]):
+            if counter >= choice:
+                break
+            ordered.append(id)
+
+        ordered.sort(reverse=True)
+
+        for id in ordered:
+            # print(id)
+            x_data = np.delete(x_data, id, 0)
+            y_data = np.delete(y_data, id, 0)
+
+    return x_data, y_data
+    # x = []
+    # y = []
+
+    # for counter, id in enumerate(turns_idx[0]):
+    #     if counter >= int(len(turns_idx[0])*rate):
+    #         break
+    #
+    #     x.append(x_data[id])
+    #     y.append(y_data[id])
+    #
+    # return np.asarray(x), np.asarray(y)
 
 def obtain_episode_data(folder_path, seg=False, delim=' ', header_names=None,
                         columns_to_use=COLS_TO_USE):
@@ -194,8 +247,8 @@ def horizontal_flip(image_array):
     return np.fliplr(image_array)
 
 
-def augment_brightness(image_array, factor=.25):
-    random_bright = factor+np.random.uniform()
+def augment_brightness(image_array, factor=.75):
+    random_bright = factor+np.random.uniform(-1, 1)
     return image_array*random_bright
 
 
@@ -243,16 +296,18 @@ def augment_turns(x_data, y_data, x_seg=None):
     y_aug = []
     x_seg_aug = []
 
-    turns_idx = return_turn_ids(y_data)
     # print(turns_idx)
+    turns_idx = return_turn_ids(y_data)
 
     for idx in turns_idx[0]:
-        x_aug.append(horizontal_flip(x_data[idx]))
+        flipped = horizontal_flip(x_data[idx])
+        x_aug.append(flipped)
         y_aug.append(y_data[idx])
         y_aug[-1][0] = -1*y_aug[-1][0]
 
         if x_seg is not None:
-            x_seg_aug.append(horizontal_flip(x_seg[idx]))
+            flipped_seg = horizontal_flip(x_seg[idx])
+            x_seg_aug.append(flipped_seg)
 
         num_transformations_to_apply = random.randint(
             0, len(available_transformations))
@@ -262,9 +317,13 @@ def augment_turns(x_data, y_data, x_seg=None):
         #     # print(key)
             x_aug.append(available_transformations[key](x_data[idx]))
             y_aug.append(y_data[idx])
+            x_aug.append(available_transformations[key](flipped))
+            y_aug.append(y_data[idx])
+            y_aug[-1][0] = -1*y_aug[-1][0]
 
             if x_seg is not None:
                 x_seg_aug.append(available_transformations[key](x_seg[idx]))
+                x_seg_aug.append(available_transformations[key](flipped_seg))
 
     if x_seg is not None:
         return x_aug, x_seg_aug, y_aug
@@ -449,16 +508,26 @@ def fit_over_folders(data_path, model, save_model, target_model_name,
     y_data = []
     x_seg = []
 
+    folders.sort()
+    x_val, y_val = obtain_data(val_path, seg=False)
+
     for idx, folder in enumerate(folders):
-        if idx > 5:
+        # if (folder != '72_town_1') and (folder != '73_town_1'):
+        #     continue
+
+        # if (folder != '73_town_1'):
+        #     continue
+
+        if idx > 8:
             break
-        for i in range(5):
-            # x_val, x_val_seg, y_val = obtain_data(val_path, seg=True)
+        for i in range(3):
             if i == 0:
                 print("Obtaining data: {} {}/{}".format(folder, idx, len(folders) - 1))
                 x_data, y_data = obtain_episode_data(
                     data_path+"/"+folder, header_names=DATA_HEADERS)
-
+                # print(np.shape(y_data))
+                # x_data, y_data = strip_straight(x_data, y_data)
+                # print(np.shape(y_data))
                 x_aug, y_aug = augment_turns(x_data, y_data)
 
                 if np.shape(x_aug)[0] > 0:
@@ -469,15 +538,15 @@ def fit_over_folders(data_path, model, save_model, target_model_name,
             history = model.fit([x_data],
                                 [y_data[..., 0],
                                  y_data[..., 1]],
-                                # validation_data=([x_val, x_val_seg],
-                                #                  [y_val[..., 0],
-                                #                   y_val[..., 1]]),
+                                validation_data=([x_val],
+                                                 [y_val[..., 0],
+                                                  y_val[..., 1]]),
                                 epochs=nb_epochs,
                                 callbacks=callbacks,
                                 )
             checkpoint += 1
             history_file.write(str(history.history['loss'])+"\n")
-            # val_history_file.write(str(history.history['val_loss'])+"\n")
+            val_history_file.write(str(history.history['val_loss'])+"\n")
             if checkpoint == checkpoint_stage:
                 printc("Checkpoint: Saving model to " + "../weights/"+target_model_name+"/checkpoint_"
                        + str(i) + "_" + target_model_name + '.h5', 'okgreen')
@@ -495,10 +564,14 @@ def main():
     params = [
         # [0.001, 80, 10, 2, 0.6],
         # [0.001, 320, 40, 8, 0.6],
-        # [0.001, 50, 10, 5, 0.01]]
-        [0.001, 100, 50, 10, 0.05]]
-    # [0.001, 200, 100, 20, 0.01],
-    # [0.001, 200, 100, 20, 0.05],
+        [0.0001, 100, 50, 0.01]]
+        # [0.001, 150, 75, 20, 0.01],
+        # [0.001, 150, 75, 20, 0.05],
+        # [0.001, 150, 75, 20, 0.1],
+        # [0.001, 150, 75, 20, 0.2],
+        # [0.001, 150, 75, 20, 0.3],
+        # [0.001, 150, 75, 20, 0.4],
+        # [0.001, 150, 75, 20, 0.5]]
     # [0.001, 200, 100, 20, 0.1],
     # [0.001, 400, 200, 40, 0.01],
     # [0.001, 400, 200, 40, 0.05],
@@ -509,10 +582,12 @@ def main():
 
     # x_data, x_seg, y_data = obtain_episode_data(
     #     "/media/helmi/drive_3/carla_dataset/train/51_town_1", seg=True)
+    # print(np.shape(x_data))
     #
-    # x_aug, x_seg_aug, y_aug = augment_turns(x_data, y_data, x_seg)
-    # #
-    # print(np.shape(x_aug)[0])
+    # x_data, y_data = strip_straight(x_data, y_data)
+    # print(np.shape(x_data))
+    # print(y_data)
+
     #
     # # x_aug, x_seg_aug, y_aug = augment_episode(x_data, y_data, x_seg)
     # x_data = np.append(x_data, x_aug, axis = 0)
@@ -520,7 +595,7 @@ def main():
     # print("Shape normal {} shape aug {}".format(
     #         np.shape(x_data), np.shape(x_aug)))
     #
-    # # print(y_data[turns_idx])
+    # print(y_data[turns_idx])
     #
     # # pilutil.imshow(test)
 
@@ -530,7 +605,7 @@ def main():
 
         # tensorboard_cb = keras.callbacks.TensorBoard(log_dir='./graph', histogram_freq=0,
         #           write_graph=True, write_images=True)
-        stop = EarlyStopping(monitor='loss', min_delta=0.0005, patience=1, verbose=1,
+        stop = EarlyStopping(monitor='val_loss', min_delta=0, patience=2, verbose=1,
                              mode='auto')
         # checkpointer = ModelCheckpoint(filepath='../weights/checkpoint.hdf5', verbose=1,
         #                                save_best_only=True)
@@ -552,11 +627,13 @@ def main():
                            callbacks=callbacks)
 
         else:
-            model = network.create_model(
-                            model_params=param,
-                            seg=False,
-                            multi_gpu=USE_MULTI,
-                            gpus=gpus)
+            # model = network.create_model(
+            #                 model_params=param,
+            #                 seg=False,
+            #                 multi_gpu=USE_MULTI,
+            #                 gpus=gpus)
+            model = network_2.create_model(param)
+
             train_with_all(DATASET_PATH, VALSET_PATH,
                            target_model_name=name,
                            model=model,
