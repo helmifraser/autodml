@@ -32,7 +32,7 @@ from skimage.transform import rotate
 from skimage.util import random_noise
 
 from loss_history import LossHistory
-import network_2
+import network
 from coloured_print import printc
 
 np.random.seed(420)  # for high reproducibility
@@ -286,7 +286,7 @@ def augment_episode(x_data, y_data, x_seg=None):
     return x_aug, y_aug
 
 
-def augment_turns(x_data, y_data, x_seg=None):
+def augment_turns(x_data, y_data, x_seg=None, straight=False):
     available_transformations = {
         'noise': add_random_noise,
         'brightness': augment_brightness
@@ -298,6 +298,14 @@ def augment_turns(x_data, y_data, x_seg=None):
 
     # print(turns_idx)
     turns_idx = return_turn_ids(y_data)
+    if straight is True:
+        turns_idx = return_straight_ids(y_data)
+        np.random.shuffle(turns_idx[0])
+        tmp = turns_idx[0]
+        # print(np.shape(turns_idx))
+        choice = int(len(tmp)*0.5)
+        tmp = np.delete(tmp, np.s_[0:choice])
+        turns_idx = [tmp]
 
     for idx in turns_idx[0]:
         flipped = horizontal_flip(x_data[idx])
@@ -508,7 +516,7 @@ def fit_over_folders(data_path, model, save_model, target_model_name,
     y_data = []
     x_seg = []
 
-    folders.sort()
+    # folders.sort()
     x_val, y_val = obtain_data(val_path, seg=False)
 
     for idx, folder in enumerate(folders):
@@ -518,18 +526,26 @@ def fit_over_folders(data_path, model, save_model, target_model_name,
         # if (folder != '73_town_1'):
         #     continue
 
-        if idx > 8:
+        if idx >= 2:
             break
         for i in range(3):
             if i == 0:
                 print("Obtaining data: {} {}/{}".format(folder, idx, len(folders) - 1))
                 x_data, y_data = obtain_episode_data(
                     data_path+"/"+folder, header_names=DATA_HEADERS)
+
                 # print(np.shape(y_data))
                 # x_data, y_data = strip_straight(x_data, y_data)
                 # print(np.shape(y_data))
+
                 x_aug, y_aug = augment_turns(x_data, y_data)
 
+                if np.shape(x_aug)[0] > 0:
+                    x_data = np.append(x_data, x_aug, axis=0)
+                    # x_seg = np.append(x_seg, x_seg_aug, axis=0)
+                    y_data = np.append(y_data, y_aug, axis=0)
+
+                x_aug, y_aug = augment_turns(x_data, y_data, straight=True)
                 if np.shape(x_aug)[0] > 0:
                     x_data = np.append(x_data, x_aug, axis=0)
                     # x_seg = np.append(x_seg, x_seg_aug, axis=0)
@@ -562,42 +578,14 @@ def main():
     gpus = digit_counter(os.environ["CUDA_VISIBLE_DEVICES"])[0]
 
     params = [
-        # [0.001, 80, 10, 2, 0.6],
-        # [0.001, 320, 40, 8, 0.6],
-        [0.0001, 100, 50, 0.01]]
-        # [0.001, 150, 75, 20, 0.01],
-        # [0.001, 150, 75, 20, 0.05],
-        # [0.001, 150, 75, 20, 0.1],
-        # [0.001, 150, 75, 20, 0.2],
-        # [0.001, 150, 75, 20, 0.3],
-        # [0.001, 150, 75, 20, 0.4],
-        # [0.001, 150, 75, 20, 0.5]]
-    # [0.001, 200, 100, 20, 0.1],
-    # [0.001, 400, 200, 40, 0.01],
-    # [0.001, 400, 200, 40, 0.05],
-    # [0.001, 400, 200, 40, 0.1],
-    # [0.001, 600, 300, 80, 0.01],
-    # [0.001, 600, 300, 80, 0.05],
-    # [0.001, 600, 300, 80, 0.1]]
-
-    # x_data, x_seg, y_data = obtain_episode_data(
-    #     "/media/helmi/drive_3/carla_dataset/train/51_town_1", seg=True)
-    # print(np.shape(x_data))
-    #
-    # x_data, y_data = strip_straight(x_data, y_data)
-    # print(np.shape(x_data))
-    # print(y_data)
-
-    #
-    # # x_aug, x_seg_aug, y_aug = augment_episode(x_data, y_data, x_seg)
-    # x_data = np.append(x_data, x_aug, axis = 0)
-    #
-    # print("Shape normal {} shape aug {}".format(
-    #         np.shape(x_data), np.shape(x_aug)))
-    #
-    # print(y_data[turns_idx])
-    #
-    # # pilutil.imshow(test)
+        [0.001, 100, 100, 0.01],
+        [0.001, 100, 100, 0.1],
+        [0.001, 100, 100, 0.3],
+        [0.001, 100, 100, 0.8],
+        [0.001, 200, 50, 0.01],
+        [0.001, 200, 50, 0.1],
+        [0.001, 200, 50, 0.3],
+        [0.001, 200, 50, 0.8]]
 
     for id, param in enumerate(params):
         name = str(param).replace(" ", "_") + \
@@ -627,12 +615,12 @@ def main():
                            callbacks=callbacks)
 
         else:
-            # model = network.create_model(
-            #                 model_params=param,
-            #                 seg=False,
-            #                 multi_gpu=USE_MULTI,
-            #                 gpus=gpus)
-            model = network_2.create_model(param)
+            model = network.create_model(
+                            model_params=param,
+                            seg=False,
+                            multi_gpu=USE_MULTI,
+                            gpus=gpus)
+            # model = network_2.create_model(param)
 
             train_with_all(DATASET_PATH, VALSET_PATH,
                            target_model_name=name,
