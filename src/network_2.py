@@ -10,7 +10,7 @@ from keras import backend as K
 K.set_image_dim_ordering('tf')
 
 IMG_WIDTH = 224
-IMG_HEIGHT = 134
+IMG_HEIGHT = 224
 
 
 def atan_layer(x):

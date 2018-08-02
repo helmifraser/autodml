@@ -12,7 +12,7 @@ from keras.utils import plot_model
 from coloured_print import printc
 
 IMG_WIDTH = 224
-IMG_HEIGHT = 134
+IMG_HEIGHT = 224
 
 
 def euclidean_distance_loss(y_true, y_pred):
@@ -72,6 +72,7 @@ def create_model(model_params, seg=False, multi_gpu=False, gpus=2):
     mobilenet = MobileNetV2(alpha=1.0,
                             depth_multiplier=1,
                             include_top=False,
+                            weights='imagenet',
                             pooling='max')(img)
 
     print_params(model_params)
@@ -92,8 +93,8 @@ def create_model(model_params, seg=False, multi_gpu=False, gpus=2):
         throttle = create_branch(mobilenet, model_params[1:-1], name='throttle')
         model = Model(inputs=img, outputs=[steer, throttle])
 
-    for layers in model.layers:
-        layers.trainable = True
+    for layers in model.layers[:2]:
+        layers.trainable = False
 
     adam = optimizers.Adam(lr=model_params[0])
 

@@ -6,14 +6,6 @@ from datetime import datetime
 import argparse
 import random
 
-import tensorflow as tf
-config = tf.ConfigProto()
-# config.gpu_options.per_process_gpu_memory_fraction = 0.75
-config.gpu_options.allow_growth = True
-session = tf.Session(config=config)
-
-from keras.backend.tensorflow_backend import set_session
-set_session(session)
 
 import keras
 from keras import optimizers
@@ -33,6 +25,7 @@ from skimage.util import random_noise
 
 from loss_history import LossHistory
 import network
+import network_2
 from coloured_print import printc
 
 np.random.seed(420)  # for high reproducibility
@@ -51,6 +44,15 @@ d_path = args.d
 v_path = args.v
 
 os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_number)[1:-1]
+
+import tensorflow as tf
+config = tf.ConfigProto()
+# config.gpu_options.per_process_gpu_memory_fraction = 0.75
+config.gpu_options.allow_growth = True
+session = tf.Session(config=config)
+
+from keras.backend.tensorflow_backend import set_session
+set_session(session)
 
 USE_MULTI = False
 if len(gpu_number) > 1:
@@ -125,7 +127,7 @@ def return_turn_ids(data, thresh=0.035):
     return np.where(abs(data[:, 0]) > thresh)
 
 
-def strip_straight(x_data, y_data, rate=0.5):
+def strip_straight(x_data, y_data, rate=0.25):
     turns_idx = return_straight_ids(y_data)
     # print(np.shape(turns_idx))
     # print(turns_idx)
@@ -213,7 +215,9 @@ def image_extract(folder_path, seg=False, number_of_images=800):
                 id = int(filename[:pos])
                 img = load_img(os.path.join(
                     folder_path, filename), target_size=(224, 224))
-                images[id] = img_to_array(img)[90:, :, :]
+                images[id] = img_to_array(img)
+
+                # images[id] = img_to_array(img)[90:, :, :]
                 # print("Before {}".format(images[id]))
 
                 # images[id] = np.expand_dims(images[id], axis=0)
@@ -526,9 +530,9 @@ def fit_over_folders(data_path, model, save_model, target_model_name,
         # if (folder != '73_town_1'):
         #     continue
 
-        if idx >= 2:
+        if idx >= 10:
             break
-        for i in range(3):
+        for i in range(1):
             if i == 0:
                 print("Obtaining data: {} {}/{}".format(folder, idx, len(folders) - 1))
                 x_data, y_data = obtain_episode_data(
@@ -578,18 +582,22 @@ def main():
     gpus = digit_counter(os.environ["CUDA_VISIBLE_DEVICES"])[0]
 
     params = [
-        [0.001, 100, 100, 0.01],
-        [0.001, 100, 100, 0.1],
-        [0.001, 100, 100, 0.3],
-        [0.001, 100, 100, 0.8],
-        [0.001, 200, 50, 0.01],
-        [0.001, 200, 50, 0.1],
-        [0.001, 200, 50, 0.3],
-        [0.001, 200, 50, 0.8]]
+        [0.001, 100, 100, 0.05],
+        [0.001, 100, 100, 0.05],
+        [0.001, 100, 100, 0.05],
+        [0.001, 100, 100, 0.05],
+        [0.001, 100, 100, 0.05]]
+        # [0.001, 100, 100, 0.1],
+        # [0.001, 100, 100, 0.3],
+        # [0.001, 100, 100, 0.8],
+        # [0.001, 200, 50, 0.01],
+        # [0.001, 200, 50, 0.1],
+        # [0.001, 200, 50, 0.3],
+        # [0.001, 200, 50, 0.8]]
 
     for id, param in enumerate(params):
         name = str(param).replace(" ", "_") + \
-                   str(datetime.now()).replace(" ", "_")
+                   str(datetime.now()).replace(" ", "_").replace("[", "").replace("]", "-")
 
         # tensorboard_cb = keras.callbacks.TensorBoard(log_dir='./graph', histogram_freq=0,
         #           write_graph=True, write_images=True)

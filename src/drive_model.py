@@ -22,6 +22,7 @@ import logging
 import random
 import time
 import os
+import sys
 
 try:
     import pygame
@@ -55,6 +56,8 @@ from carla.settings import CarlaSettings
 from carla.tcp import TCPConnectionError
 from carla.util import print_over_same_line
 
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+
 import tensorflow as tf
 config = tf.ConfigProto()
 # config.gpu_options.per_process_gpu_memory_fraction = 0.75
@@ -79,7 +82,6 @@ WINDOW_HEIGHT = 224
 MINI_WINDOW_WIDTH = 320
 MINI_WINDOW_HEIGHT = 180
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "6"
 
 def euclidean_distance_loss(y_true, y_pred):
     """
@@ -94,14 +96,19 @@ def euclidean_distance_loss(y_true, y_pred):
 def atan(x):
     return tf.atan(x)
 
-def return_driving_model(model_path):
+def return_driving_model(model_path, type):
     if os.path.isfile(model_path) is not True:
         print("Model {} not found!")
         sys.exit(0)
 
     print("Loading model: {}".format(model_path[model_path.rfind("/")+1:]))
-    # model = load_model(model_path, custom_objects={'euclidean_distance_loss': euclidean_distance_loss, 'relu6': K.relu})
-    model = load_model(model_path, custom_objects={'atan':atan})
+    if type == 0:
+        model = load_model(model_path, custom_objects={'euclidean_distance_loss': euclidean_distance_loss, 'relu6': K.relu})
+    elif type == 1:
+        model = load_model(model_path, custom_objects={'atan':atan})
+    else:
+        print("Model type '{}' not recognised, check argument".format(type))
+        sys.exit(0)
 
     model.summary()
 
@@ -249,8 +256,9 @@ class CarlaGame(object):
         self._mini_view_image2 = sensor_data.get('CameraSemSeg', None)
         # self._lidar_measurement = sensor_data.get('Lidar32', None)
 
+        im_rgb = image_converter.to_rgb_array(self._main_image)
 
-        im_rgb = image_converter.to_rgb_array(self._main_image)[90:,:,:]
+        # im_rgb = image_converter.to_rgb_array(self._main_image)[90:,:,:]
         # im_rgb = scipy.misc.imresize(im_rgb, size=(224,224))
         im_rgb = np.expand_dims(im_rgb, axis=0)
         im_rgb = im_rgb*(2./256) - 1
@@ -463,6 +471,11 @@ def main():
         default=0,
         help='Car starting position')
     argparser.add_argument(
+        '-type', metavar='model_type',
+        type=int,
+        default=0,
+        help='Mobilenet based model, or Nvidia based model (0, 1)')
+    argparser.add_argument(
         '-v', '--verbose',
         action='store_true',
         dest='debug',
@@ -508,7 +521,7 @@ def main():
 
     while True:
         try:
-            driving_model = return_driving_model(args.model)
+            driving_model = return_driving_model(args.model, args.type)
             with make_carla_client(args.host, args.port) as client:
                 game = CarlaGame(client, args)
                 game.execute(driving_model)
